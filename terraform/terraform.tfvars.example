@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+project_id    = "my-gcp-project"
+region        = "us-central1"
+github_owner  = "my-github-username"
+github_repo   = "TradingAgents"
+invoker_email = "me@example.com"
+
+# Secrets: add a name here after populating it in Secret Manager.
+# Start with just the provider(s) you use; add more as you configure them.
+active_secrets = [
+  "OPENAI_API_KEY",
+  # "ANTHROPIC_API_KEY",
+  # "GOOGLE_API_KEY",
+]

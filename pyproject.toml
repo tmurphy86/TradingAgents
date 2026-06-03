@@ -32,6 +32,12 @@ dependencies = [
     "yfinance>=0.2.63",
 ]
 
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+]
+
 [project.scripts]
 tradingagents = "cli.main:app"
 

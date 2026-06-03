@@ -133,6 +133,48 @@ For local models with Ollama:
 docker compose --profile ollama run --rm tradingagents-ollama
 ```
 
+### Deploy to GCP
+
+A Terraform module and FastAPI service layer are included for deploying to Google Cloud Run. This gives you a zero-idle-cost cloud endpoint (scales to zero between analyses) with automatic deploys on every push to `main`.
+
+**Quick overview:**
+
+```
+terraform/     Infrastructure as Code (Cloud Run, GCS, Secret Manager, Artifact Registry, Cloud Build)
+api/           FastAPI wrapper around TradingAgentsGraph for non-interactive HTTP invocation
+cloudbuild.yaml  CI/CD: test → build → push → deploy on push to main
+```
+
+**Setup (once):**
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars   # fill in project_id, github_owner, invoker_email
+terraform init && terraform apply
+
+# Populate at least one LLM provider key
+echo -n "sk-..." | gcloud secrets versions add OPENAI_API_KEY --data-file=-
+# Add "OPENAI_API_KEY" to active_secrets in terraform.tfvars, then: terraform apply
+
+# Push the initial image
+REPO=$(terraform output -raw artifact_registry_repo)
+docker build -f api/Dockerfile -t $REPO/app:latest . && docker push $REPO/app:latest
+gcloud run deploy tradingagents --image=$REPO/app:latest --region=us-central1
+```
+
+**Run an analysis:**
+
+```bash
+URL=$(gcloud run services describe tradingagents --region=us-central1 --format='value(status.url)')
+curl -X POST \
+  -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+  -H "Content-Type: application/json" \
+  -d '{"ticker":"NVDA","date":"2026-01-15"}' \
+  $URL/analyze
+```
+
+After initial setup, every push to `main` redeploys automatically via Cloud Build. See [overview.md](overview.md#gcp-deployment) for the full deployment guide including secret management, rollback, and accessing persistent data.
+
 ### Required APIs
 
 TradingAgents supports multiple LLM providers. Set the API key for your chosen provider:
