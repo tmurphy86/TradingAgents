@@ -6,12 +6,14 @@ import importlib
 
 import pytest
 
+pytestmark = pytest.mark.unit
 
 # ---- openai_client side: _resolve_provider_base_url -----------------------
 
 
 def _reload_client():
     import tradingagents.llm_clients.openai_client as mod
+
     return importlib.reload(mod)
 
 
@@ -73,23 +75,19 @@ def test_cli_dropdown_uses_env(monkeypatch):
     """The Ollama entry in the CLI dropdown must reflect OLLAMA_BASE_URL."""
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://cli-remote:11434/v1")
     import cli.utils as cli_utils
+
     importlib.reload(cli_utils)
     # Reach inside the function via the same env-read it does at call time
-    ollama_url = (
-        __import__("os").environ.get("OLLAMA_BASE_URL")
-        or "http://localhost:11434/v1"
-    )
+    ollama_url = __import__("os").environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1"
     assert ollama_url == "http://cli-remote:11434/v1"
 
 
 def test_cli_dropdown_default_when_unset(monkeypatch):
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     import cli.utils as cli_utils
+
     importlib.reload(cli_utils)
-    ollama_url = (
-        __import__("os").environ.get("OLLAMA_BASE_URL")
-        or "http://localhost:11434/v1"
-    )
+    ollama_url = __import__("os").environ.get("OLLAMA_BASE_URL") or "http://localhost:11434/v1"
     assert ollama_url == "http://localhost:11434/v1"
 
 
@@ -99,6 +97,7 @@ def test_cli_dropdown_default_when_unset(monkeypatch):
 def test_confirm_endpoint_shows_default(monkeypatch, capsys):
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     import cli.utils as cli_utils
+
     importlib.reload(cli_utils)
     cli_utils.confirm_ollama_endpoint("http://localhost:11434/v1")
     out = capsys.readouterr().out
@@ -110,6 +109,7 @@ def test_confirm_endpoint_shows_default(monkeypatch, capsys):
 def test_confirm_endpoint_marks_env_origin(monkeypatch, capsys):
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://remote-host:11434/v1")
     import cli.utils as cli_utils
+
     importlib.reload(cli_utils)
     cli_utils.confirm_ollama_endpoint("http://remote-host:11434/v1")
     out = capsys.readouterr().out
@@ -121,6 +121,7 @@ def test_confirm_endpoint_warns_on_missing_scheme(monkeypatch, capsys):
     """If user sets OLLAMA_BASE_URL=0.0.0.128, advise on the expected shape."""
     monkeypatch.setenv("OLLAMA_BASE_URL", "0.0.0.128")
     import cli.utils as cli_utils
+
     importlib.reload(cli_utils)
     cli_utils.confirm_ollama_endpoint("0.0.0.128")
     out = capsys.readouterr().out
@@ -132,6 +133,7 @@ def test_confirm_endpoint_warns_on_non_default_port_remote(monkeypatch, capsys):
     """A remote host with no :11434 gets a soft hint about port mismatch."""
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://remote-host/v1")
     import cli.utils as cli_utils
+
     importlib.reload(cli_utils)
     cli_utils.confirm_ollama_endpoint("http://remote-host/v1")
     out = capsys.readouterr().out
@@ -142,6 +144,7 @@ def test_confirm_endpoint_quiet_on_local_no_port(monkeypatch, capsys):
     """Local host without port shouldn't trigger the remote-port hint."""
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost/v1")
     import cli.utils as cli_utils
+
     importlib.reload(cli_utils)
     cli_utils.confirm_ollama_endpoint("http://localhost/v1")
     out = capsys.readouterr().out
@@ -151,6 +154,7 @@ def test_confirm_endpoint_quiet_on_local_no_port(monkeypatch, capsys):
 def test_ollama_model_labels_no_local_suffix():
     """Labels should no longer claim '(local)' since the endpoint is dynamic."""
     from tradingagents.llm_clients.model_catalog import get_model_options
+
     for mode in ("quick", "deep"):
         labels = [label for label, _ in get_model_options("ollama", mode)]
         assert all("local" not in label for label in labels), labels
@@ -159,6 +163,7 @@ def test_ollama_model_labels_no_local_suffix():
 def test_ollama_offers_custom_model_id():
     """Ollama users with custom-pulled models can pick 'Custom model ID'."""
     from tradingagents.llm_clients.model_catalog import get_model_options
+
     for mode in ("quick", "deep"):
         entries = get_model_options("ollama", mode)
         values = [v for _, v in entries]

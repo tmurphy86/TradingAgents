@@ -1,0 +1,120 @@
+name: Terraform Drift Detection
+
+# Runs daily to detect infrastructure drift (manual changes in GCP that
+# diverge from the terraform state). Opens a GitHub issue if drift is found,
+# tagging @claude to assess whether to apply or update the config.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch:        # allow manual trigger
+
+permissions:
+  contents: read
+  id-token: write    # Workload Identity Federation
+  issues: write      # open drift issue
+
+jobs:
+  drift-check:
+    name: Terraform drift check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_VAR_project_id:     ${{ vars.TF_VAR_PROJECT_ID }}
+      TF_VAR_region:         ${{ vars.TF_VAR_REGION }}
+      TF_VAR_github_owner:   ${{ github.repository_owner }}
+      TF_VAR_github_repo:    ${{ github.event.repository.name }}
+      TF_VAR_invoker_email:  ${{ vars.TF_VAR_INVOKER_EMAIL }}
+      TF_VAR_active_secrets: ${{ vars.TF_VAR_ACTIVE_SECRETS }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_TERRAFORM_SA }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Init
+        run: terraform init -backend-config="bucket=${{ vars.GCP_TF_STATE_BUCKET }}" -input=false
+
+      - name: Detect drift
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -no-color 2>&1 | tee plan-output.txt
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        continue-on-error: true
+        # Exit codes: 0 = no changes, 1 = error, 2 = changes present (drift)
+
+      - name: Open issue on drift
+        if: steps.plan.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('terraform/plan-output.txt', 'utf8').slice(0, 8000);
+
+            // Don't open a duplicate if there's already an open drift issue
+            const { data: existing } = await github.rest.issues.listForRepo({
+              ...context.repo,
+              state: 'open',
+              labels: 'terraform-drift',
+            });
+            if (existing.length > 0) {
+              console.log(`Drift issue already open: #${existing[0].number} — skipping.`);
+              return;
+            }
+
+            const today = new Date().toISOString().slice(0, 10);
+            await github.rest.issues.create({
+              ...context.repo,
+              title: `Terraform drift detected — ${today}`,
+              body: [
+                '## Infrastructure Drift',
+                '',
+                'The daily Terraform plan found changes between the config and the live GCP state.',
+                'This usually means a manual change was made directly in GCP.',
+                '',
+                '<details><summary>Terraform plan output</summary>',
+                '',
+                '```',
+                plan,
+                '```',
+                '</details>',
+                '',
+                '**Action required:** either run `terraform apply` to reconcile, or update the',
+                'config to match reality and commit the change.',
+                '',
+                `@claude Please review this drift. Determine whether this should be fixed by running \`terraform apply\` or by updating the terraform config to match the current GCP state, and recommend the safest path forward.`,
+              ].join('\n'),
+              labels: ['infrastructure', 'terraform-drift', 'needs-triage'],
+            });
+
+      - name: Close any open drift issue if no drift
+        if: steps.plan.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: existing } = await github.rest.issues.listForRepo({
+              ...context.repo,
+              state: 'open',
+              labels: 'terraform-drift',
+            });
+            for (const issue of existing) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issue.number,
+                body: '✅ Drift resolved — `terraform plan` shows no changes as of today.',
+              });
+              await github.rest.issues.update({
+                ...context.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+            }

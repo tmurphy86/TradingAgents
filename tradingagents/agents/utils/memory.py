@@ -1,8 +1,8 @@
 """Append-only markdown decision log for TradingAgents."""
 
-from typing import List, Optional
-from pathlib import Path
 import re
+from pathlib import Path
+from typing import List, Optional
 
 from tradingagents.agents.utils.rating import parse_rating
 
@@ -146,9 +146,7 @@ class TradingMemoryLog:
                     f" | {raw_pct} | {alpha_pct} | {holding_days}d]"
                 )
                 rest = "\n".join(lines[1:])
-                new_blocks.append(
-                    f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{reflection}"
-                )
+                new_blocks.append(f"{new_tag}\n\n{rest.lstrip()}\n\nREFLECTION:\n{reflection}")
                 updated = True
             else:
                 new_blocks.append(block)

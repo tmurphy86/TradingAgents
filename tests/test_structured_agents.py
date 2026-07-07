@@ -22,7 +22,6 @@ from tradingagents.agents.schemas import (
 )
 from tradingagents.agents.trader.trader import create_trader
 
-
 # ---------------------------------------------------------------------------
 # Render functions
 # ---------------------------------------------------------------------------
@@ -149,8 +148,7 @@ class TestTraderAgent:
 
     def test_falls_back_to_freetext_when_structured_unavailable(self):
         plain_response = (
-            "**Action**: Sell\n\nGuidance cut hits margins.\n\n"
-            "FINAL TRANSACTION PROPOSAL: **SELL**"
+            "**Action**: Sell\n\nGuidance cut hits margins.\n\nFINAL TRANSACTION PROPOSAL: **SELL**"
         )
         llm = MagicMock()
         llm.with_structured_output.side_effect = NotImplementedError("provider unsupported")
@@ -187,9 +185,7 @@ def _structured_rm_llm(captured: dict, plan: ResearchPlan | None = None):
             strategic_actions="Hold current position; reassess after earnings.",
         )
     structured = MagicMock()
-    structured.invoke.side_effect = lambda prompt: (
-        captured.__setitem__("prompt", prompt) or plan
-    )
+    structured.invoke.side_effect = lambda prompt: captured.__setitem__("prompt", prompt) or plan
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
     return llm
@@ -223,7 +219,9 @@ class TestResearchManagerAgent:
             assert f"**{tier}**" in prompt, f"missing {tier} in prompt"
 
     def test_falls_back_to_freetext_when_structured_unavailable(self):
-        plain_response = "**Recommendation**: Sell\n\n**Rationale**: ...\n\n**Strategic Actions**: ..."
+        plain_response = (
+            "**Recommendation**: Sell\n\n**Rationale**: ...\n\n**Strategic Actions**: ..."
+        )
         llm = MagicMock()
         llm.with_structured_output.side_effect = NotImplementedError("provider unsupported")
         llm.invoke.return_value = MagicMock(content=plain_response)

@@ -1,5 +1,9 @@
 import unittest
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 from cli.models import AnalystType, AssetType
 from cli.utils import detect_asset_type, filter_analysts_for_asset_type
 from tradingagents.graph.propagation import Propagator

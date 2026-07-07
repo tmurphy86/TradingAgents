@@ -95,7 +95,10 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Claude Sonnet 4.5 - High-performance for agents and coding", "claude-sonnet-4-5"),
         ],
         "deep": [
-            ("Claude Opus 4.7 - Latest frontier, long-running agents and coding", "claude-opus-4-7"),
+            (
+                "Claude Opus 4.7 - Latest frontier, long-running agents and coding",
+                "claude-opus-4-7",
+            ),
             ("Claude Opus 4.6 - Frontier intelligence, agents and coding", "claude-opus-4-6"),
             ("Claude Opus 4.5 - Premium, max intelligence", "claude-opus-4-5"),
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
@@ -109,7 +112,10 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Gemini 2.5 Flash Lite - Fast, low-cost", "gemini-2.5-flash-lite"),
         ],
         "deep": [
-            ("Gemini 3.1 Pro - Reasoning-first, complex workflows (preview)", "gemini-3.1-pro-preview"),
+            (
+                "Gemini 3.1 Pro - Reasoning-first, complex workflows (preview)",
+                "gemini-3.1-pro-preview",
+            ),
             ("Gemini 3 Flash - Next-gen fast (preview)", "gemini-3-flash-preview"),
             ("Gemini 2.5 Pro - Stable pro model", "gemini-2.5-pro"),
             ("Gemini 2.5 Flash - Balanced, stable", "gemini-2.5-flash"),
@@ -186,12 +192,6 @@ def get_model_options(provider: str, mode: str) -> List[ModelOption]:
 def get_known_models() -> Dict[str, List[str]]:
     """Build known model names from the shared CLI catalog."""
     return {
-        provider: sorted(
-            {
-                value
-                for options in mode_options.values()
-                for _, value in options
-            }
-        )
+        provider: sorted({value for options in mode_options.values() for _, value in options})
         for provider, mode_options in MODEL_OPTIONS.items()
     }

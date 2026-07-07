@@ -26,9 +26,9 @@ variable "invoker_email" {
 }
 
 variable "image_tag" {
-  description = "Docker image tag to deploy; updated automatically by Cloud Build on each push"
+  description = "Docker image tag to deploy. Null uses a placeholder on first apply; CI owns the running image via gcloud run deploy thereafter."
   type        = string
-  default     = "latest"
+  default     = null
 }
 
 variable "cloud_run_memory" {

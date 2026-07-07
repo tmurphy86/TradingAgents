@@ -6,6 +6,8 @@ import importlib
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 import tradingagents.default_config as default_config_module
 
 
@@ -59,8 +61,16 @@ def test_int_coercion(monkeypatch):
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("true", True), ("True", True), ("1", True), ("yes", True), ("on", True),
-        ("false", False), ("False", False), ("0", False), ("no", False), ("off", False),
+        ("true", True),
+        ("True", True),
+        ("1", True),
+        ("yes", True),
+        ("on", True),
+        ("false", False),
+        ("False", False),
+        ("0", False),
+        ("no", False),
+        ("off", False),
     ],
 )
 def test_bool_coercion(monkeypatch, raw, expected):

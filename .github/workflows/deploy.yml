@@ -1,0 +1,168 @@
+name: Deploy
+
+# Runs on every push to main. Code validation and tests already passed on the
+# PR (ci.yml). This workflow promotes the exact image that CI built and tested
+# to Artifact Registry, then deploys it to Cloud Run.
+#
+# Image promotion (no rebuild):
+#   ci.yml pushes  → ghcr.io/<repo>/app:<sha>   (release candidate)
+#   This workflow  → pulls that image, retags it, pushes to Artifact Registry
+#   Cloud Run      → deploys the retagged image (byte-for-byte identical to CI)
+#
+# Terraform changes use a separate workflow (terraform.yml).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'terraform/**'
+
+permissions:
+  contents: read
+  id-token: write    # required for Workload Identity Federation
+  packages: read     # pull the CI candidate image from ghcr.io
+  issues: write      # create rollback issue on health check failure
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Promote — pull the CI candidate from ghcr.io, retag, push to Artifact
+  # Registry. No `docker build` runs here: the image that ran the test suite
+  # is the image that gets deployed.
+  #
+  # Requires GitHub Actions variables:
+  #   GCP_WORKLOAD_IDENTITY_PROVIDER  — from `terraform output workload_identity_provider`
+  #   GCP_DEPLOY_SA                   — from `terraform output github_deploy_sa`
+  #   GCP_REGION                      — e.g. us-central1
+  #   GCP_IMAGE_REPO                  — from `terraform output artifact_registry_repo`
+  # ---------------------------------------------------------------------------
+  promote:
+    name: Promote image to Artifact Registry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set lowercase image base
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/app" >> $GITHUB_ENV
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Tag current :latest as :previous (enables rollback)
+        run: |
+          gcloud artifacts docker tags add \
+            ${{ vars.GCP_IMAGE_REPO }}/app:latest \
+            ${{ vars.GCP_IMAGE_REPO }}/app:previous \
+            --quiet 2>/dev/null || true
+
+      - name: Pull CI candidate from ghcr.io
+        run: docker pull ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Retag and push to Artifact Registry
+        run: |
+          docker tag ${{ env.IMAGE }}:${{ github.sha }} \
+            ${{ vars.GCP_IMAGE_REPO }}/app:${{ github.sha }}
+          docker tag ${{ env.IMAGE }}:${{ github.sha }} \
+            ${{ vars.GCP_IMAGE_REPO }}/app:latest
+          docker push ${{ vars.GCP_IMAGE_REPO }}/app:${{ github.sha }}
+          docker push ${{ vars.GCP_IMAGE_REPO }}/app:latest
+
+  # ---------------------------------------------------------------------------
+  # Deploy to Cloud Run.
+  #
+  # Requires GitHub Actions variables (in addition to those above):
+  #   GCP_CLOUD_RUN_SERVICE — Cloud Run service name (tradingagents)
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    needs: promote
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
+          image: ${{ vars.GCP_IMAGE_REPO }}/app:${{ github.sha }}
+          region: ${{ vars.GCP_REGION }}
+
+  # ---------------------------------------------------------------------------
+  # Health check — polls /health for up to 120s after deploy.
+  # On failure: auto-rolls back to :previous and opens a GitHub issue.
+  # ---------------------------------------------------------------------------
+  health-check:
+    name: Health check & rollback
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - name: Poll /health endpoint
+        id: health
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ vars.GCP_CLOUD_RUN_SERVICE }} \
+            --region ${{ vars.GCP_REGION }} --format 'value(status.url)')
+          echo "Service URL: $SERVICE_URL"
+          for i in $(seq 1 12); do
+            TOKEN=$(gcloud auth print-identity-token)
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer $TOKEN" \
+              --connect-timeout 5 --max-time 10 \
+              "$SERVICE_URL/health" 2>/dev/null || echo "000")
+            echo "Attempt $i/12: HTTP $CODE"
+            [ "$CODE" = "200" ] && echo "Health check passed." && exit 0
+            sleep 10
+          done
+          echo "::error::Health check failed after 120s — triggering rollback"
+          exit 1
+        continue-on-error: true
+
+      - name: Rollback to :previous on health failure
+        if: steps.health.outcome == 'failure'
+        run: |
+          echo "Rolling back to :previous..."
+          gcloud run deploy ${{ vars.GCP_CLOUD_RUN_SERVICE }} \
+            --image ${{ vars.GCP_IMAGE_REPO }}/app:previous \
+            --region ${{ vars.GCP_REGION }} \
+            --quiet
+          echo "Rollback complete."
+
+      - name: Open GitHub issue on rollback
+        if: steps.health.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              ...context.repo,
+              title: `🚨 Deploy rollback triggered — ${context.sha.slice(0, 7)}`,
+              body: [
+                '## Deploy Health Check Failed',
+                '',
+                `Cloud Run failed to pass \`/health\` after deploying commit \`${context.sha}\`.`,
+                'The service was automatically rolled back to \`:previous\`.',
+                '',
+                `**Commit:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`,
+                `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                '',
+                `@claude Please review the failing commit and the workflow run above, identify why the service failed its health check, and propose a fix.`,
+              ].join('\n'),
+              labels: ['deployment', 'needs-triage'],
+            });
+
+      - name: Fail the workflow after rollback
+        if: steps.health.outcome == 'failure'
+        run: exit 1

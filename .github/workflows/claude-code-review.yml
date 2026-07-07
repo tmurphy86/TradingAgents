@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
 
@@ -38,7 +38,33 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+
+            After completing the inline review, post a comprehensive summary comment on the PR using the gh CLI:
+
+            gh pr comment ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --body "<your summary>"
+
+            The summary comment must follow this structure:
+            ## Claude Code Review Summary
+
+            **Overall assessment:** <1-2 sentence verdict — safe to merge / needs changes / blocking issues>
+
+            ### Findings
+            | Severity | File | Issue |
+            |---|---|---|
+            | HIGH/MED/LOW | file:line | description |
+
+            (If no findings, say "No significant issues found.")
+
+            ### Security
+            <specific security observations or "None">
+
+            ### Correctness & Cost
+            <race conditions, error handling gaps, unnecessary LLM calls, or "None">
+
+            ### Recommendation
+            <merge / request changes / block — with one concrete next step>
+
+            Be direct and specific. Skip praise. If the diff is infra/CI only with no application logic changes, say so explicitly.
 

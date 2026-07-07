@@ -18,6 +18,21 @@ output "service_account_email" {
   value       = google_service_account.run_sa.email
 }
 
+output "workload_identity_provider" {
+  description = "WIF provider resource name — paste into GCP_WORKLOAD_IDENTITY_PROVIDER GitHub variable"
+  value       = google_iam_workload_identity_pool_provider.github.name
+}
+
+output "github_deploy_sa" {
+  description = "Deploy service account email — paste into GCP_DEPLOY_SA GitHub variable"
+  value       = google_service_account.github_deploy.email
+}
+
+output "github_terraform_sa" {
+  description = "Terraform service account email — paste into GCP_TERRAFORM_SA GitHub variable"
+  value       = google_service_account.github_terraform.email
+}
+
 output "analyze_curl" {
   description = "Example authenticated curl command to trigger an analysis"
   value       = <<-EOT

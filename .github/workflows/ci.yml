@@ -1,0 +1,394 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+# ============================================================================
+# PHASE 1 — Code Validation
+# Lint and security checks run first. Phase 2 (image build + tests) is
+# blocked until every Phase 1 job passes.
+#
+# NOTE: UI build validation is implicit — the Dockerfile node-builder stage
+# runs `npm ci && npm run build`. If the UI fails to compile, the
+# build-and-push-ci job fails before any tests run.
+# ============================================================================
+
+jobs:
+
+  # --------------------------------------------------------------------------
+  # 1a. Lint auto-fix — runs ruff --fix and commits back to the branch.
+  #     The subsequent lint job validates the result.
+  # --------------------------------------------------------------------------
+  lint-autofix:
+    name: Lint auto-fix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "check --fix tradingagents/ api/ cli/ tests/"
+        continue-on-error: true
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "format tradingagents/ api/ cli/ tests/"
+        continue-on-error: true
+
+      - name: Commit auto-fixes if any
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet && echo "No lint fixes needed." && exit 0
+          git add -u
+          git commit -m "style: auto-fix ruff lint issues [skip ci]"
+          git push
+
+  # --------------------------------------------------------------------------
+  # 1b. Lint validation — checks that code is clean after auto-fix.
+  #     Fails if ruff still finds violations that couldn't be auto-fixed.
+  # --------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: lint-autofix
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "check tradingagents/ api/ cli/ tests/"
+
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: "format --check tradingagents/ api/ cli/ tests/"
+
+  # --------------------------------------------------------------------------
+  # 1c. Security scan — two-tier:
+  #     HIGH severity → blocking; posts comment to auto-remediate.
+  #     MEDIUM/LOW → advisory PR comment only (non-blocking).
+  # --------------------------------------------------------------------------
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bandit
+        run: pip install --quiet "bandit[toml]>=1.8"
+
+      - name: HIGH severity scan (blocking)
+        id: bandit-high
+        run: |
+          bandit -r tradingagents/ api/ -lll -q -c pyproject.toml \
+            --format json -o /tmp/bandit-high.json 2>/dev/null || true
+          python3 -c "
+          import json, sys
+          try:
+              data = json.load(open('/tmp/bandit-high.json'))
+          except Exception:
+              sys.exit(0)
+          results = data.get('results', [])
+          if results:
+              print(f'HIGH severity findings: {len(results)}')
+              for r in results:
+                  print(f\"  [{r['issue_severity']}] {r['filename']}:{r['line_number']} — {r['issue_text']}\")
+              sys.exit(1)
+          print('No HIGH severity findings.')
+          "
+        continue-on-error: true
+
+      - name: Post remediation comment on HIGH findings
+        if: steps.bandit-high.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let data;
+            try { data = JSON.parse(fs.readFileSync('/tmp/bandit-high.json', 'utf8')); }
+            catch { return; }
+            const results = data.results || [];
+            if (results.length === 0) return;
+            const findings = results.map(r =>
+              `- **${r.issue_severity}** \`${r.filename}:${r.line_number}\` — ${r.issue_text}`
+            ).join('\n');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `## 🚨 Security: HIGH Severity Findings (blocking)\n\n${findings}\n\nPlease fix these HIGH severity security issues identified by bandit before this PR can merge.\n\n**Workflow run:** ${runUrl}`;
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
+
+      - name: Fail on HIGH findings
+        if: steps.bandit-high.outcome == 'failure'
+        run: exit 1
+
+      - name: MEDIUM/LOW scan (advisory, non-blocking)
+        id: bandit-medium
+        run: |
+          bandit -r tradingagents/ api/ -ll -q -c pyproject.toml \
+            --format json -o /tmp/bandit-medium.json 2>/dev/null || true
+        continue-on-error: true
+
+      - name: Post advisory comment for MEDIUM findings
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let data;
+            try { data = JSON.parse(fs.readFileSync('/tmp/bandit-medium.json', 'utf8')); }
+            catch { return; }
+            const results = (data.results || []).filter(r => r.issue_severity === 'MEDIUM');
+            if (results.length === 0) return;
+            const rows = results.map(r =>
+              `| ${r.issue_severity} | \`${r.filename}:${r.line_number}\` | ${r.issue_text} |`
+            ).join('\n');
+            const body = `## ℹ️ Security Advisory (non-blocking)\n\n| Severity | Location | Issue |\n|---|---|---|\n${rows}\n\n_MEDIUM findings are informational. HIGH findings block the build._`;
+            const {data: comments} = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.payload.pull_request.number
+            });
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('Security Advisory (non-blocking)')
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.payload.pull_request.number, body });
+            }
+
+  # --------------------------------------------------------------------------
+  # Phase 1 gate — lint and security must pass before Phase 2 starts.
+  # UI build is validated by the Docker build in Phase 2 (node-builder stage).
+  # --------------------------------------------------------------------------
+  validate-phase1:
+    name: Phase 1 gate
+    runs-on: ubuntu-latest
+    needs: [lint, security]
+    steps:
+      - run: echo "All Phase 1 validation checks passed. Proceeding to image build and tests."
+
+# ============================================================================
+# PHASE 2 — Image Build + Application Validation
+# Build both the test and production images, push to ghcr.io, then run the
+# full test suite against the test image. Only runs after Phase 1 passes.
+#
+# Using ghcr.io as the CI image registry:
+#   - GITHUB_TOKEN grants packages: write with no extra secrets
+#   - The same prod image SHA is later promoted to Artifact Registry in deploy.yml
+#   - No image is ever rebuilt after this point — exact artifact promotion
+# ============================================================================
+
+  # --------------------------------------------------------------------------
+  # 2a. Build both Docker stages and push to ghcr.io.
+  #     test stage  → ghcr.io/<repo>/app:test-<sha>   (used by test job below)
+  #     prod stage  → ghcr.io/<repo>/app:<sha>         (promoted by deploy.yml)
+  #
+  #     The Dockerfile node-builder stage runs npm ci + npm run build — any
+  #     UI compile failure fails this job before tests can run.
+  # --------------------------------------------------------------------------
+  build-and-push-ci:
+    name: Build & push CI images
+    runs-on: ubuntu-latest
+    needs: validate-phase1
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Set lowercase image base
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/app" >> $GITHUB_ENV
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push test stage
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          target: test
+          push: true
+          tags: ${{ env.IMAGE }}:test-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push prod stage (release candidate)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+
+  # --------------------------------------------------------------------------
+  # 2b. Run tests against the pushed test image — no rebuild.
+  #     On failure: uploads verbose output and invokes Claude to fix.
+  # --------------------------------------------------------------------------
+  test:
+    name: Tests (unit · smoke · regression)
+    runs-on: ubuntu-latest
+    needs: build-and-push-ci
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    steps:
+      - name: Set lowercase image base
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/app" >> $GITHUB_ENV
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull test image
+        run: docker pull ${{ env.IMAGE }}:test-${{ github.sha }}
+
+      - name: Run tests
+        id: run-tests
+        run: |
+          docker run --rm \
+            ${{ env.IMAGE }}:test-${{ github.sha }} \
+            python -m pytest tests/ -m "unit or smoke or regression" -v --tb=short \
+            2>&1 | tee /tmp/test-output.txt; exit ${PIPESTATUS[0]}
+
+      - name: Upload test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ github.sha }}
+          path: /tmp/test-output.txt
+          retention-days: 3
+
+      - name: Post test failure comment
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let output = '(output unavailable)';
+            try {
+              const raw = fs.readFileSync('/tmp/test-output.txt', 'utf8');
+              output = raw.split('\n').slice(-80).join('\n');
+            } catch {}
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              '## ❌ Tests Failed',
+              '',
+              `**CI run:** ${runUrl}`,
+              '',
+              '<details><summary>Test output (last 80 lines)</summary>',
+              '',
+              '```',
+              output,
+              '```',
+              '</details>',
+              '',
+              '**To reproduce locally:**',
+              '```bash',
+              'docker compose run --rm test python -m pytest tests/ -m "unit or smoke or regression" -v --tb=short',
+              '```',
+              '',
+              `> Auto-remediation running — see the **Auto-remediate test failures** job in [this workflow run](${runUrl}) for Claude's fix attempt.`,
+            ].join('\n');
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+
+  # --------------------------------------------------------------------------
+  # 2c. Auto-remediate — fires directly when tests fail.
+  #     Invokes Claude Code to investigate and push a fix to the branch.
+  #     NOTE: @claude in bot comments does NOT trigger claude.yml — GitHub
+  #     blocks GITHUB_TOKEN events from firing workflow triggers. This job
+  #     calls Claude Code directly to bypass that restriction.
+  # --------------------------------------------------------------------------
+  auto-remediate:
+    name: Auto-remediate test failures
+    runs-on: ubuntu-latest
+    needs: test
+    if: failure()
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Download test output
+        uses: actions/download-artifact@v4
+        with:
+          name: test-output-${{ github.sha }}
+          path: /tmp
+        continue-on-error: true
+
+      - name: Read test output
+        id: test-output
+        run: |
+          OUTPUT=$(tail -80 /tmp/test-output.txt 2>/dev/null || echo "Test output not available")
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          echo "$OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Invoke Claude to fix test failures
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          prompt: |
+            The CI test suite is failing on PR #${{ github.event.pull_request.number }} (branch: `${{ github.head_ref }}`).
+
+            CI run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Test output:
+            ```
+            ${{ steps.test-output.outputs.output }}
+            ```
+
+            Reproduce locally:
+            ```bash
+            docker compose run --rm test python -m pytest tests/ -m "unit or smoke or regression" -v --tb=short
+            ```
+
+            Please:
+            1. Read the failing test output above carefully
+            2. Identify the root cause (broken test, broken application code, missing dependency, import error, etc.)
+            3. Fix it — edit the relevant source files
+            4. Verify your fix makes sense by reading the test and the code it exercises
+            5. Push the fix to branch `${{ github.head_ref }}` so CI re-runs automatically
+
+            Do not add `# noqa` or skip markers to hide failures — fix the underlying problem.
