@@ -1,5 +1,9 @@
 import unittest
 
+import pytest
+
+pytestmark = pytest.mark.unit
+
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
     build_analyst_execution_plan,

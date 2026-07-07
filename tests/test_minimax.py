@@ -47,9 +47,7 @@ class TestMinimaxReasoningSplit:
         receive reasoning_split — the openai SDK rejects unknown kwargs with
         TypeError (#826)."""
         for model in ("minimax-text-01", "MiniMax-Coding-Plan"):
-            payload = _client(model)._get_request_payload(
-                [HumanMessage(content="hi")]
-            )
+            payload = _client(model)._get_request_payload([HumanMessage(content="hi")])
             assert "reasoning_split" not in payload, (
                 f"{model!r} payload unexpectedly contains reasoning_split"
             )
@@ -80,6 +78,6 @@ class TestMinimaxStructuredOutputDispatch:
     def test_schema_still_bound_as_tool(self):
         bound = _client("MiniMax-M2.7").with_structured_output(self._Pick)
         tools = self._bound_kwargs(bound).get("tools", [])
-        assert any(
-            t.get("function", {}).get("name") == "_Pick" for t in tools
-        ), f"schema not bound: {tools}"
+        assert any(t.get("function", {}).get("name") == "_Pick" for t in tools), (
+            f"schema not bound: {tools}"
+        )
