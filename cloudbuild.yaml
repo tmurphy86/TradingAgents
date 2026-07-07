@@ -1,4 +1,0 @@
-# cloudbuild.yaml is no longer used.
-# Build, push, and deployment are handled by GitHub Actions:
-#   .github/workflows/deploy.yml   — test → build → push → Cloud Run deploy
-#   .github/workflows/terraform.yml — infrastructure plan / apply
