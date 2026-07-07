@@ -1,15 +1,21 @@
 name: Deploy
 
-# Runs on every push to main. Code validation and tests already passed on the
-# PR (ci.yml). This workflow promotes the exact image that CI built and tested
-# to Artifact Registry, then deploys it to Cloud Run.
+# Runs on every push to main. Builds the test image, validates it, then
+# builds and pushes the production image to Artifact Registry and deploys
+# to Cloud Run. Both images use the GHA layer cache, so incremental builds
+# are fast even though we build fresh here.
 #
-# Image promotion (no rebuild):
-#   ci.yml pushes  → ghcr.io/<repo>/app:<sha>   (release candidate)
-#   This workflow  → pulls that image, retags it, pushes to Artifact Registry
-#   Cloud Run      → deploys the retagged image (byte-for-byte identical to CI)
+# Why we build fresh rather than promoting the CI image:
+#   ci.yml runs on pull_request. When a PR is merged, GitHub creates a new
+#   merge commit with a different SHA — a promotion attempt would look for
+#   an image at a SHA that never existed in the registry.
 #
-# Terraform changes use a separate workflow (terraform.yml).
+# Required GitHub Actions variables (set in repo Settings → Variables):
+#   GCP_WORKLOAD_IDENTITY_PROVIDER  — terraform output workload_identity_provider
+#   GCP_DEPLOY_SA                   — terraform output github_deploy_sa
+#   GCP_REGION                      — e.g. us-central1
+#   GCP_IMAGE_REPO                  — terraform output artifact_registry_repo
+#   GCP_CLOUD_RUN_SERVICE           — Cloud Run service name (tradingagents)
 
 on:
   push:
@@ -19,72 +25,85 @@ on:
 
 permissions:
   contents: read
-  id-token: write    # required for Workload Identity Federation
-  packages: read     # pull the CI candidate image from ghcr.io
-  issues: write      # create rollback issue on health check failure
+  id-token: write   # Workload Identity Federation
+  issues: write     # open rollback issue on health-check failure
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Promote — pull the CI candidate from ghcr.io, retag, push to Artifact
-  # Registry. No `docker build` runs here: the image that ran the test suite
-  # is the image that gets deployed.
-  #
-  # Requires GitHub Actions variables:
-  #   GCP_WORKLOAD_IDENTITY_PROVIDER  — from `terraform output workload_identity_provider`
-  #   GCP_DEPLOY_SA                   — from `terraform output github_deploy_sa`
-  #   GCP_REGION                      — e.g. us-central1
-  #   GCP_IMAGE_REPO                  — from `terraform output artifact_registry_repo`
+  # 1. Build the test image and run the full test suite.
+  #    Nothing downstream runs if tests fail.
   # ---------------------------------------------------------------------------
-  promote:
-    name: Promote image to Artifact Registry
+  test:
+    name: Tests (unit · smoke · regression)
     runs-on: ubuntu-latest
     steps:
-      - name: Set lowercase image base
-        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/app" >> $GITHUB_ENV
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          target: test
+          load: true
+          tags: tradingagents-test:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run tests
+        run: |
+          docker run --rm tradingagents-test:${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # 2. Build the production image and push to Artifact Registry.
+  #    Runs only after tests pass.
+  #    Tags current :latest as :previous first to enable one-click rollback.
+  # ---------------------------------------------------------------------------
+  build-and-push:
+    name: Build & push to Artifact Registry
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
 
-      - name: Tag current :latest as :previous (enables rollback)
+      - name: Tag :latest as :previous (enables rollback)
         run: |
           gcloud artifacts docker tags add \
             ${{ vars.GCP_IMAGE_REPO }}/app:latest \
             ${{ vars.GCP_IMAGE_REPO }}/app:previous \
             --quiet 2>/dev/null || true
 
-      - name: Pull CI candidate from ghcr.io
-        run: docker pull ${{ env.IMAGE }}:${{ github.sha }}
-
-      - name: Retag and push to Artifact Registry
-        run: |
-          docker tag ${{ env.IMAGE }}:${{ github.sha }} \
+      - name: Build and push production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          push: true
+          tags: |
             ${{ vars.GCP_IMAGE_REPO }}/app:${{ github.sha }}
-          docker tag ${{ env.IMAGE }}:${{ github.sha }} \
             ${{ vars.GCP_IMAGE_REPO }}/app:latest
-          docker push ${{ vars.GCP_IMAGE_REPO }}/app:${{ github.sha }}
-          docker push ${{ vars.GCP_IMAGE_REPO }}/app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
-  # Deploy to Cloud Run.
-  #
-  # Requires GitHub Actions variables (in addition to those above):
-  #   GCP_CLOUD_RUN_SERVICE — Cloud Run service name (tradingagents)
+  # 3. Deploy the new image to Cloud Run.
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy to Cloud Run
     runs-on: ubuntu-latest
-    needs: promote
+    needs: build-and-push
     steps:
       - uses: google-github-actions/auth@v2
         with:
@@ -98,8 +117,8 @@ jobs:
           region: ${{ vars.GCP_REGION }}
 
   # ---------------------------------------------------------------------------
-  # Health check — polls /health for up to 120s after deploy.
-  # On failure: auto-rolls back to :previous and opens a GitHub issue.
+  # 4. Health check — polls /health for up to 120s.
+  #    On failure: auto-rolls back to :previous and opens a GitHub issue.
   # ---------------------------------------------------------------------------
   health-check:
     name: Health check & rollback
@@ -127,11 +146,11 @@ jobs:
             [ "$CODE" = "200" ] && echo "Health check passed." && exit 0
             sleep 10
           done
-          echo "::error::Health check failed after 120s — triggering rollback"
+          echo "::error::Health check failed after 120s"
           exit 1
         continue-on-error: true
 
-      - name: Rollback to :previous on health failure
+      - name: Rollback to :previous on failure
         if: steps.health.outcome == 'failure'
         run: |
           echo "Rolling back to :previous..."
@@ -148,21 +167,19 @@ jobs:
           script: |
             await github.rest.issues.create({
               ...context.repo,
-              title: `🚨 Deploy rollback triggered — ${context.sha.slice(0, 7)}`,
+              title: `Deploy rollback triggered — ${context.sha.slice(0, 7)}`,
               body: [
                 '## Deploy Health Check Failed',
                 '',
-                `Cloud Run failed to pass \`/health\` after deploying commit \`${context.sha}\`.`,
+                `Cloud Run failed \`/health\` after deploying commit \`${context.sha}\`.`,
                 'The service was automatically rolled back to \`:previous\`.',
                 '',
                 `**Commit:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`,
                 `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-                '',
-                `@claude Please review the failing commit and the workflow run above, identify why the service failed its health check, and propose a fix.`,
               ].join('\n'),
               labels: ['deployment', 'needs-triage'],
             });
 
-      - name: Fail the workflow after rollback
+      - name: Fail workflow after rollback
         if: steps.health.outcome == 'failure'
         run: exit 1
