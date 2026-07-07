@@ -98,3 +98,10 @@ resource "google_project_iam_member" "github_terraform_wif_admin" {
   role    = "roles/iam.workloadIdentityPoolAdmin"
   member  = "serviceAccount:${google_service_account.github_terraform.email}"
 }
+
+# roles/editor excludes secretmanager.secrets.setIamPolicy; secretmanager.admin adds it
+resource "google_project_iam_member" "github_terraform_secretmanager_admin" {
+  project = var.project_id
+  role    = "roles/secretmanager.admin"
+  member  = "serviceAccount:${google_service_account.github_terraform.email}"
+}
