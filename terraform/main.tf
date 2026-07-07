@@ -8,11 +8,12 @@ terraform {
     }
   }
 
-  # Uncomment to store state in GCS (recommended once the bucket exists)
-  # backend "gcs" {
-  #   bucket = "<your-project-id>-tf-state"
-  #   prefix = "tradingagents/state"
-  # }
+  # GCS backend — bucket is passed at init time so this file stays committed as-is.
+  # Locally:  scripts/bootstrap.sh handles this automatically
+  # CI:       terraform init -backend-config="bucket=$GCP_TF_STATE_BUCKET"
+  backend "gcs" {
+    prefix = "tradingagents/state"
+  }
 }
 
 provider "google" {

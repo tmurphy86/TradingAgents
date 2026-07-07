@@ -37,13 +37,15 @@ def _fetch_subreddit(
     limit: int,
     timeout: float,
 ) -> list[dict]:
-    qs = urlencode({
-        "q": ticker,
-        "restrict_sr": "on",
-        "sort": "new",
-        "t": "week",  # last 7 days
-        "limit": limit,
-    })
+    qs = urlencode(
+        {
+            "q": ticker,
+            "restrict_sr": "on",
+            "sort": "new",
+            "t": "week",  # last 7 days
+            "limit": limit,
+        }
+    )
     url = _API.format(sub=sub, qs=qs)
     req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
@@ -77,7 +79,9 @@ def fetch_reddit_posts(
         posts = _fetch_subreddit(ticker, sub, limit_per_sub, timeout)
         total_posts += len(posts)
         if not posts:
-            blocks.append(f"r/{sub}: <no posts found mentioning {ticker.upper()} in the past 7 days>")
+            blocks.append(
+                f"r/{sub}: <no posts found mentioning {ticker.upper()} in the past 7 days>"
+            )
             continue
 
         lines = [f"r/{sub} — {len(posts)} recent posts mentioning {ticker.upper()}:"]
@@ -86,9 +90,7 @@ def fetch_reddit_posts(
             score = p.get("score", 0)
             comments = p.get("num_comments", 0)
             created = p.get("created_utc")
-            created_str = (
-                time.strftime("%Y-%m-%d", time.gmtime(created)) if created else "?"
-            )
+            created_str = time.strftime("%Y-%m-%d", time.gmtime(created)) if created else "?"
             selftext = (p.get("selftext") or "").replace("\n", " ").strip()
             if len(selftext) > 240:
                 selftext = selftext[:240] + "…"

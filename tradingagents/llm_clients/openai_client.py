@@ -96,13 +96,9 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
         response_dict = (
             response
             if isinstance(response, dict)
-            else response.model_dump(
-                exclude={"choices": {"__all__": {"message": {"parsed"}}}}
-            )
+            else response.model_dump(exclude={"choices": {"__all__": {"message": {"parsed"}}}})
         )
-        for generation, choice in zip(
-            chat_result.generations, response_dict.get("choices", [])
-        ):
+        for generation, choice in zip(chat_result.generations, response_dict.get("choices", [])):
             reasoning = choice.get("message", {}).get("reasoning_content")
             if reasoning is not None:
                 generation.message.additional_kwargs["reasoning_content"] = reasoning
@@ -138,8 +134,13 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
-    "timeout", "max_retries", "reasoning_effort",
-    "api_key", "callbacks", "http_client", "http_async_client",
+    "timeout",
+    "max_retries",
+    "reasoning_effort",
+    "api_key",
+    "callbacks",
+    "http_client",
+    "http_async_client",
 )
 
 # Provider base URLs. API-key env vars live in api_key_env.PROVIDER_API_KEY_ENV
@@ -148,16 +149,16 @@ _PASSTHROUGH_KWARGS = (
 # separate endpoints because international and China accounts cannot share
 # credentials (#758).
 _PROVIDER_BASE_URL = {
-    "xai":        "https://api.x.ai/v1",
-    "deepseek":   "https://api.deepseek.com",
-    "qwen":       "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-    "qwen-cn":    "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "glm":        "https://api.z.ai/api/paas/v4/",
-    "glm-cn":     "https://open.bigmodel.cn/api/paas/v4/",
-    "minimax":    "https://api.minimax.io/v1",
+    "xai": "https://api.x.ai/v1",
+    "deepseek": "https://api.deepseek.com",
+    "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "qwen-cn": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "glm": "https://api.z.ai/api/paas/v4/",
+    "glm-cn": "https://open.bigmodel.cn/api/paas/v4/",
+    "minimax": "https://api.minimax.io/v1",
     "minimax-cn": "https://api.minimaxi.com/v1",
     "openrouter": "https://openrouter.ai/api/v1",
-    "ollama":     "http://localhost:11434/v1",
+    "ollama": "http://localhost:11434/v1",
 }
 
 

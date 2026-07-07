@@ -1,4 +1,43 @@
 services:
+  # -------------------------------------------------------------------------
+  # Local development — hot-reload backend + Vite dev server
+  # Usage: docker compose up dev ui-dev
+  # -------------------------------------------------------------------------
+  dev:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: dev
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app                              # live source mount — changes reload instantly
+      - tradingagents_data:/root/.tradingagents
+
+  ui-dev:
+    image: node:20-slim
+    working_dir: /ui
+    command: sh -c "npm ci --ignore-scripts && npm run dev -- --host"
+    ports:
+      - "5173:5173"
+    environment:
+      - API_URL=http://dev:8080             # proxy to backend service name
+    volumes:
+      - ./ui:/ui
+      - ui_node_modules:/ui/node_modules    # persist node_modules across restarts
+    depends_on:
+      - dev
+
+  test:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: test
+    # No env_file — conftest.py injects placeholder API keys for all non-integration tests.
+    # Pass ANTHROPIC_API_KEY etc. via `docker compose run -e KEY=val test` to run integration tests.
+
   tradingagents:
     build: .
     env_file:
@@ -7,6 +46,17 @@ services:
       - tradingagents_data:/home/appuser/.tradingagents
     tty: true
     stdin_open: true
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - tradingagents_data:/home/appuser/.tradingagents
 
   ollama:
     image: ollama/ollama:latest
@@ -33,3 +83,4 @@ services:
 volumes:
   tradingagents_data:
   ollama_data:
+  ui_node_modules:

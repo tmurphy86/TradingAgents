@@ -117,12 +117,28 @@ conda activate tradingagents
 
 Install the package and its dependencies:
 ```bash
-pip install .
+uv sync --extra api
 ```
 
-### Docker
+> **Note:** TradingAgents uses [uv](https://docs.astral.sh/uv/) for dependency management. Install it with `pip install uv` or `brew install uv`.
 
-Alternatively, run with Docker:
+### Web Dashboard
+
+The easiest way to run TradingAgents is via the web dashboard — configure runs, watch agents in real time, browse history, and manage watchlists:
+
+```bash
+cp .env.example .env  # add your API keys
+docker compose up api
+# open http://localhost:8080
+```
+
+<p align="center">
+  <em>Configure a run → watch 12 agents stream live → see the final BUY/HOLD/SELL decision</em>
+</p>
+
+### Docker (CLI)
+
+Run the interactive terminal interface with Docker:
 ```bash
 cp .env.example .env  # add your API keys
 docker compose run --rm tradingagents
@@ -140,8 +156,9 @@ A Terraform module and FastAPI service layer are included for deploying to Googl
 **Quick overview:**
 
 ```
-terraform/     Infrastructure as Code (Cloud Run, GCS, Secret Manager, Artifact Registry, Cloud Build)
-api/           FastAPI wrapper around TradingAgentsGraph for non-interactive HTTP invocation
+terraform/       Infrastructure as Code (Cloud Run, GCS, Secret Manager, Artifact Registry, Cloud Build)
+api/             FastAPI backend + web dashboard (single container; api/Dockerfile is a 3-stage build)
+ui/              React + Vite + Tailwind frontend (built into api/Dockerfile, served at /)
 cloudbuild.yaml  CI/CD: test → build → push → deploy on push to main
 ```
 
@@ -162,18 +179,23 @@ docker build -f api/Dockerfile -t $REPO/app:latest . && docker push $REPO/app:la
 gcloud run deploy tradingagents --image=$REPO/app:latest --region=us-central1
 ```
 
-**Run an analysis:**
+**Access the dashboard or run an analysis:**
 
 ```bash
 URL=$(gcloud run services describe tradingagents --region=us-central1 --format='value(status.url)')
+
+# Web dashboard (open in browser with an IAM-authenticated proxy or whitelist your IP)
+echo $URL
+
+# Or use the API directly
 curl -X POST \
   -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
   -H "Content-Type: application/json" \
   -d '{"ticker":"NVDA","date":"2026-01-15"}' \
-  $URL/analyze
+  $URL/api/runs
 ```
 
-After initial setup, every push to `main` redeploys automatically via Cloud Build. See [overview.md](overview.md#gcp-deployment) for the full deployment guide including secret management, rollback, and accessing persistent data.
+After initial setup, every push to `main` redeploys automatically via Cloud Build. The `api/Dockerfile` 3-stage build produces a single image that serves both the API and the React web dashboard. See [overview.md](overview.md#gcp-deployment) for the full deployment guide including secret management, rollback, and accessing persistent data.
 
 ### Required APIs
 
@@ -246,6 +268,16 @@ ta = TradingAgentsGraph(debug=True, config=DEFAULT_CONFIG.copy())
 # forward propagate
 _, decision = ta.propagate("NVDA", "2026-01-15")
 print(decision)
+```
+
+Pass `event_callback` to receive real-time agent updates as the graph runs:
+
+```python
+def on_event(event):
+    if event["type"] == "agent_update":
+        print(f"[{event['agent']}] {event['content'][:200]}")
+
+_, decision = ta.propagate("NVDA", "2026-01-15", event_callback=on_event)
 ```
 
 You can also adjust the default configuration to set your own choice of LLMs, debate rounds, etc.

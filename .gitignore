@@ -224,3 +224,16 @@ terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/terraform.tfvars
+terraform/backend.tfvars
+terraform/tfplan
+
+# Frontend (ui/)
+ui/node_modules/
+ui/dist/
+
+# Runtime data (~/.tradingagents mirrors written locally during dev)
+results/
+eval_results/
+
+# OS
+.DS_Store

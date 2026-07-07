@@ -1,6 +1,7 @@
 # TradingAgents/graph/setup.py
 
 from typing import Any, Dict
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
@@ -29,9 +30,7 @@ class GraphSetup:
         self.conditional_logic = conditional_logic
         self.analyst_concurrency_limit = analyst_concurrency_limit
 
-    def setup_graph(
-        self, selected_analysts=["market", "social", "news", "fundamentals"]
-    ):
+    def setup_graph(self, selected_analysts=["market", "social", "news", "fundamentals"]):
         """Set up and compile the agent workflow graph.
 
         Args:

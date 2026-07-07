@@ -42,12 +42,22 @@ All outputs are Pydantic-validated structured objects, rendered to markdown for 
 ```bash
 git clone <repo>
 cd TradingAgents
-pip install .
+uv sync --extra api
 ```
 
 Copy `.env.example` to `.env` and fill in at least one provider API key.
 
-### CLI (interactive)
+### Web Dashboard (recommended)
+
+```bash
+cp .env.example .env
+docker compose up api
+# open http://localhost:8080
+```
+
+The dashboard lets you configure and launch analysis runs, watch all 12 agent steps stream in real time, review history, and manage watchlists.
+
+### CLI (interactive terminal)
 
 ```bash
 tradingagents
@@ -71,7 +81,7 @@ final_state, decision = ta.propagate("NVDA", "2026-01-15")
 print(decision)
 ```
 
-### Docker
+### Docker (CLI only)
 
 ```bash
 cp .env.example .env
@@ -231,13 +241,28 @@ messages                # LangGraph MessagesState (cleared between phases)
 TradingAgents/
 ├── main.py                          # Minimal programmatic entry point
 ├── pyproject.toml                   # Package metadata and dependencies (v0.2.5)
-├── Dockerfile / docker-compose.yml  # CLI container (interactive, local dev)
+├── Dockerfile                       # CLI image (interactive terminal, uv-based)
+├── docker-compose.yml               # CLI + API services; ollama profile
 ├── cloudbuild.yaml                  # GCP CI/CD pipeline (test → build → push → deploy)
 ├── .env.example                     # API key template
 │
-├── api/                             # GCP API server (non-interactive Cloud Run target)
-│   ├── main.py                      # FastAPI app wrapping TradingAgentsGraph.propagate()
-│   └── Dockerfile                   # API image (installs [api] extras, uvicorn entrypoint)
+├── api/                             # FastAPI backend + web dashboard server
+│   ├── main.py                      # Run management, SSE streaming, watchlist CRUD, StaticFiles mount
+│   └── Dockerfile                   # 3-stage build: Node (UI) → uv/Python (deps) → slim runtime
+│
+├── ui/                              # React + Vite + Tailwind web dashboard
+│   ├── src/
+│   │   ├── api.ts                   # fetch-based API client; streamRun() → EventSource
+│   │   ├── types.ts                 # RunRequest, RunRecord, RunResult, Watchlist interfaces
+│   │   ├── App.tsx                  # BrowserRouter + routes
+│   │   ├── components/Layout.tsx    # Fixed sidebar navigation
+│   │   └── pages/
+│   │       ├── NewRunPage.tsx       # Run configuration form
+│   │       ├── RunPage.tsx          # Live SSE agent pipeline view
+│   │       ├── HistoryPage.tsx      # Past runs table
+│   │       └── WatchlistsPage.tsx   # Watchlist manager
+│   ├── package.json                 # React 18, react-router-dom 6, Tailwind 3, Vite 5
+│   └── vite.config.ts               # /api proxy → :8080 in dev; outputs to dist/
 │
 ├── terraform/                       # Infrastructure as Code for GCP
 │   ├── main.tf                      # Provider config + optional GCS backend
@@ -425,7 +450,7 @@ Full state JSON is saved to `~/.tradingagents/logs/<TICKER>/TradingAgentsStrateg
 
 ## GCP Deployment
 
-The Terraform module in `terraform/` provisions a complete production environment targeting a single US user. The API layer in `api/` wraps `TradingAgentsGraph.propagate()` in a FastAPI service so Cloud Run can trigger analyses over HTTP.
+The Terraform module in `terraform/` provisions a complete production environment targeting a single US user. The `api/` container serves both the FastAPI backend and the React web dashboard as a single unit — the same image that runs locally via `docker compose up api`.
 
 ### Architecture
 
@@ -438,13 +463,14 @@ Cloud Build (cloudbuild.yaml)
   ├─ build api/Dockerfile → Artifact Registry
   └─ gcloud run deploy → Cloud Run
 
-User (gcloud CLI or curl)
+User (browser or curl)
   │  authenticated via IAM identity token
   ▼
 Cloud Run  (min 0 / max 1 instance, 2 vCPU / 2 GiB, 3600 s timeout)
   │  mounts GCS bucket as /home/appuser/.tradingagents
   │  reads API keys from Secret Manager
-  └─ FastAPI → TradingAgentsGraph.propagate()
+  ├─ FastAPI /api/* → TradingAgentsGraph.propagate() + SSE streaming
+  └─ StaticFiles / → React web dashboard (ui/dist/)
 
 Persistent data in Cloud Storage
   ├─ memory/trading_memory.md   (decision log)
@@ -548,7 +574,7 @@ To roll back: `gcloud run services update-traffic tradingagents --to-revisions=P
 
 | What to extend | Where |
 | --- | --- |
-| Add a new analyst | `tradingagents/agents/analysts/` + register in `tradingagents/graph/setup.py` |
+| Add a new analyst | `tradingagents/agents/analysts/` + register in `tradingagents/graph/setup.py` + add field to `_WATCHED_FIELDS` in `trading_graph.py` |
 | Add a new LLM provider | `tradingagents/llm_clients/` (subclass `BaseLLMClient`, add to `factory.py`, `model_catalog.py`, `capabilities.py`) |
 | Add a new data source | `tradingagents/dataflows/` (implement tool, register in `interface.py`) |
 | Modify debate round limits | `config["max_debate_rounds"]` or `TRADINGAGENTS_MAX_DEBATE_ROUNDS` env var |
@@ -556,3 +582,5 @@ To roll back: `gcloud run services update-traffic tradingagents --to-revisions=P
 | Change routing logic | `tradingagents/graph/conditional_logic.py` |
 | Modify state fields | `tradingagents/agents/utils/agent_states.py` (TypedDict) |
 | Extend the CLI | `cli/main.py` |
+| Extend the web API | `api/main.py` (add routes; persist to `~/.tradingagents/`) |
+| Extend the web UI | `ui/src/pages/` (add page) + `ui/src/App.tsx` (add route) |

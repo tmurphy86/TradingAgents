@@ -1,7 +1,3 @@
-data "google_project" "project" {
-  project_id = var.project_id
-}
-
 resource "google_service_account" "run_sa" {
   account_id   = "tradingagents-run"
   display_name = "TradingAgents Cloud Run"
@@ -34,20 +30,4 @@ resource "google_cloud_run_v2_service_iam_member" "invoker" {
   name     = google_cloud_run_v2_service.api.name
   role     = "roles/run.invoker"
   member   = "user:${var.invoker_email}"
-}
-
-# Cloud Build service account needs to deploy to Cloud Run
-resource "google_project_iam_member" "cloudbuild_run_admin" {
-  project = var.project_id
-  role    = "roles/run.admin"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-
-  depends_on = [google_project_service.apis]
-}
-
-# Cloud Build needs to act as the Cloud Run service account during deploy
-resource "google_service_account_iam_member" "cloudbuild_sa_user" {
-  service_account_id = google_service_account.run_sa.name
-  role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }

@@ -22,6 +22,7 @@ See: https://github.com/TauricResearch/TradingAgents/issues/557
 from datetime import datetime, timedelta
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
 from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_language_instruction,
@@ -175,6 +176,7 @@ def create_social_media_analyst(llm):
         Import :func:`create_sentiment_analyst` directly instead.
     """
     import warnings
+
     warnings.warn(
         "create_social_media_analyst is deprecated and will be removed in a "
         "future version. Use create_sentiment_analyst instead.",

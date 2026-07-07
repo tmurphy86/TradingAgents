@@ -37,6 +37,13 @@ api = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
 ]
+dev = [
+    "httpx>=0.27",       # FastAPI TestClient
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.9",
+    "bandit[toml]>=1.8",
+]
 
 [project.scripts]
 tradingagents = "cli.main:app"
@@ -52,9 +59,34 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
     "unit: fast isolated unit tests",
-    "integration: tests requiring external services",
     "smoke: quick sanity-check tests",
+    "regression: API surface and pipeline regression tests (no live LLM calls)",
+    "integration: tests requiring live external services",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+# Conservative baseline: pyflakes + critical pycodestyle + import sorting.
+# Expand deliberately as the team tightens standards.
+select = ["E4", "E7", "E9", "F", "I"]
+ignore = [
+    "E401",  # multiple imports on one line — handled case by case
+    "E402",  # module level import not at top — logger/config patterns are intentional
+    "E741",  # ambiguous variable name (common in financial code: l, O, I)
+    "F403",  # star imports — intentional in agents/__init__.py and cli/utils.py
+    "F405",  # may be from star import — consequence of F403 above
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "ui", ".github"]
+skips = [
+    "B101",  # assert_used — pytest relies on assert
+    "B603",  # subprocess_without_shell_equals_true — used in review script intentionally
+    "B404",  # import_subprocess — needed in review script
 ]
