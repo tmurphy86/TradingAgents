@@ -101,8 +101,15 @@ resource "google_cloud_run_v2_service" "api" {
   ]
 
   # CI (GitHub Actions) owns the running image via `gcloud run deploy`.
-  # Ignore it here so Terraform doesn't revert deploys back to the placeholder.
+  # Ignore CI-owned drift here so Terraform doesn't try to "correct" fields
+  # that GitHub Actions updates on deploy/rollback.
   lifecycle {
-    ignore_changes = [template[0].containers[0].image]
+    ignore_changes = [
+      client,
+      client_version,
+      scaling,
+      template[0].containers[0].image,
+      template[0].labels,
+    ]
   }
 }
