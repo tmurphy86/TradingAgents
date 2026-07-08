@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose run --rm test*)",
+      "Bash(docker compose up*)",
+      "Bash(python -m pytest*)",
+      "Bash(uv sync*)",
+      "Bash(npm run build*)",
+      "Bash(npm test*)",
+      "Bash(npm ci*)",
+      "Bash(terraform init*)",
+      "Bash(terraform validate*)",
+      "Bash(terraform plan*)",
+      "Bash(ruff*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/*.tfstate)",
+      "Read(**/*.tfstate.*)",
+      "Bash(terraform apply*)",
+      "Bash(terraform destroy*)",
+      "Bash(gcloud run deploy*)",
+      "Bash(gcloud secrets*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/lint-changed.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

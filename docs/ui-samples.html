@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradingAgents — UI Samples</title>
+<style>
+  :root{
+    --bg:#09090b; --card:#18181b; --card2:#111113; --border:#27272a; --border2:#3f3f46;
+    --text:#f4f4f5; --muted:#a1a1aa; --dim:#71717a;
+    --green:#34d399; --green-bg:#022c22; --green-bd:#065f46;
+    --red:#fb7185; --red-bg:#4c0519; --red-bd:#9f1239;
+    --amber:#fbbf24; --amber-bg:#451a03; --amber-bd:#92400e;
+    --blue:#38bdf8; --blue-bg:#082f49; --blue-bd:#0369a1;
+    --violet:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.45}
+  .mono{font-family:ui-monospace,'Cascadia Code',Menlo,monospace}
+  header{position:sticky;top:0;z-index:10;background:rgba(9,9,11,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);padding:0 24px}
+  .hrow{display:flex;align-items:center;gap:20px;height:52px;max-width:1200px;margin:0 auto}
+  .logo{font-weight:700;letter-spacing:-.02em}
+  .logo span{color:var(--green)}
+  nav{display:flex;gap:4px;flex:1}
+  nav button{background:none;border:none;color:var(--muted);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13.5px;font-family:inherit}
+  nav button:hover{background:var(--card);color:var(--text)}
+  nav button.active{background:var(--card);color:var(--text);font-weight:600}
+  .sample-tag{font-size:11px;color:var(--amber);border:1px solid var(--amber-bd);background:var(--amber-bg);padding:2px 8px;border-radius:999px}
+  main{max-width:1200px;margin:0 auto;padding:24px}
+  .screen{display:none}
+  .screen.active{display:block}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .grid{display:grid;gap:14px}
+  .cols-2{grid-template-columns:1fr 1fr}.cols-3{grid-template-columns:repeat(3,1fr)}.cols-4{grid-template-columns:repeat(4,1fr)}.cols-5{grid-template-columns:repeat(5,1fr)}
+  @media(max-width:900px){.cols-2,.cols-3,.cols-4,.cols-5{grid-template-columns:1fr 1fr}}
+  .kpi .lbl{color:var(--muted);font-size:12px;margin-bottom:4px}
+  .kpi .val{font-size:22px;font-weight:700;letter-spacing:-.02em}
+  .kpi .delta{font-size:12px;margin-top:2px}
+  .pos{color:var(--green)}.neg{color:var(--red)}.warn{color:var(--amber)}.info{color:var(--blue)}
+  .badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid}
+  .b-green{color:var(--green);background:var(--green-bg);border-color:var(--green-bd)}
+  .b-red{color:var(--red);background:var(--red-bg);border-color:var(--red-bd)}
+  .b-amber{color:var(--amber);background:var(--amber-bg);border-color:var(--amber-bd)}
+  .b-blue{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-bd)}
+  .b-zinc{color:var(--muted);background:var(--card2);border-color:var(--border2)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:500;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--border)}
+  td{padding:9px 10px;border-bottom:1px solid var(--border)}
+  tr:last-child td{border-bottom:none}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+  .bar>div{height:100%;border-radius:3px}
+  .btn{font-family:inherit;font-size:13px;font-weight:600;border-radius:8px;padding:8px 14px;cursor:pointer;border:1px solid var(--border2);background:var(--card);color:var(--text)}
+  .btn:hover{border-color:var(--dim)}
+  .btn-danger{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
+  .btn-green{background:var(--green-bg);border-color:var(--green-bd);color:var(--green)}
+  .sect{margin:22px 0 10px;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .hr{border:none;border-top:1px solid var(--border);margin:14px 0}
+  .kv{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
+  .kv .k{color:var(--muted)}
+  .footnote{color:var(--dim);font-size:12px;margin-top:18px}
+  .input,.select{background:var(--card2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:7px 10px;font-family:inherit;font-size:13px}
+  .chip{display:inline-block;background:var(--card2);border:1px solid var(--border2);border-radius:999px;padding:3px 10px;margin:2px;font-size:12px}
+  .toggle{width:34px;height:18px;border-radius:999px;background:var(--border2);position:relative;display:inline-block;vertical-align:middle;flex-shrink:0}
+  .toggle.on{background:var(--green-bd)}
+  .toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--text)}
+  .toggle.on::after{left:18px}
+  .qa{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:10px;font-size:13px}
+  .qa .q{color:var(--blue);font-weight:600;margin-bottom:6px}
+  .qa .a{color:var(--muted)}
+  details{border:1px solid var(--border);border-radius:12px;background:var(--card);margin-bottom:10px}
+  details summary{cursor:pointer;padding:13px 16px;font-weight:600;display:flex;align-items:center;gap:10px;list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  details .body{padding:0 16px 14px;color:var(--muted);font-size:13px}
+  .explain-btn{font-size:11px;font-weight:600;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-bd);border-radius:999px;padding:2px 10px;cursor:pointer;margin-left:auto}
+</style>
+</head>
+<body>
+<header><div class="hrow">
+  <div class="logo">Trading<span>Agents</span></div>
+  <nav id="nav">
+    <button data-s="ideas" class="active">Trade Ideas</button>
+    <button data-s="accuracy">Accuracy</button>
+    <button data-s="compare">Compare Runs</button>
+    <button data-s="positions">Positions &amp; Orders</button>
+    <button data-s="run">Run Detail + Cost</button>
+    <button data-s="macro">Macro</button>
+    <button data-s="deep">Deep Dive</button>
+    <button data-s="watchlists">Watchlists</button>
+    <button data-s="settings">Settings</button>
+  </nav>
+  <span class="sample-tag">MOCKUP · SAMPLE DATA</span>
+</div></header>
+<main>
+
+<!-- ============ SCREEN 1: TRADE IDEAS ============ -->
+<section class="screen active" id="s-ideas">
+  <h1>Trade Ideas — NVDA</h1>
+  <p class="sub">Run #a3f2 · 2026-07-06 · Portfolio Manager rating: <b class="pos">Overweight</b> · Ideas ranked by conviction. Every level is computed by the quant layer; the LLM selects and explains.</p>
+
+  <div class="grid cols-3">
+    <div class="card kpi"><div class="lbl">Ensemble conviction</div><div class="val">78<span style="font-size:13px;color:var(--dim)">/100</span></div>
+      <div class="bar" style="margin-top:8px"><div style="width:78%;background:var(--green)"></div></div></div>
+    <div class="card kpi"><div class="lbl">LLM debate verdict</div><div class="val pos">Bullish</div><div class="delta" style="color:var(--muted)">Research Mgr: Buy · Risk debate: 2–1 favor</div></div>
+    <div class="card kpi"><div class="lbl">Quant score</div><div class="val">71</div><div class="delta" style="color:var(--muted)">Momentum 82 · Mean-rev 44 · Vol regime: elevated (IV rank 68)</div></div>
+  </div>
+  <div class="card" style="margin-top:14px;border-color:var(--amber-bd);background:linear-gradient(0deg,var(--card),var(--card))">
+    <span class="badge b-amber">SIGNAL DISAGREEMENT: LOW</span>
+    <span style="color:var(--muted);font-size:13px;margin-left:10px">LLM and quant layers agree on direction; quant flags stretched short-term momentum (RSI 71) — reflected in entry zones below current price.</span>
+  </div>
+
+  <div class="sect">Ranked ideas (3)</div>
+
+  <!-- Idea 1 -->
+  <div class="card" style="border-left:3px solid var(--green);margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">#1 · Equity — Long NVDA</b>
+      <span class="badge b-green">CONVICTION 78</span>
+      <span class="badge b-zinc">SWING · 4–8 WK</span>
+      <span style="flex:1"></span>
+      <span class="mono" style="color:var(--muted);font-size:12px">R:R 2.6</span>
+    </div>
+    <div class="grid cols-5" style="margin-top:12px">
+      <div><div class="kv k" style="color:var(--muted);font-size:12px">Entry zone</div><div class="mono">$181.40 – 184.20</div></div>
+      <div><div class="kv k" style="color:var(--muted);font-size:12px">Stop</div><div class="mono neg">$172.80 (−5.4%)</div></div>
+      <div><div class="kv k" style="color:var(--muted);font-size:12px">Target 1 / 2</div><div class="mono pos">$198.00 / $207.50</div></div>
+      <div><div class="kv k" style="color:var(--muted);font-size:12px">Size</div><div class="mono">6.1% equity · risk 0.75%</div></div>
+      <div><div class="kv k" style="color:var(--muted);font-size:12px">Scale-out</div><div class="mono">50% @ T1, trail rest</div></div>
+    </div>
+    <hr class="hr">
+    <div style="font-size:13px;color:var(--muted)"><b style="color:var(--text)">Thesis:</b> Data-center demand re-acceleration (fundamentals report) + positive earnings-revision momentum; sentiment recovering off June washout. <b style="color:var(--text)">Invalidation:</b> weekly close below $173 or Q2 guide under $61B revenue.</div>
+  </div>
+
+  <!-- Idea 2 -->
+  <div class="card" style="border-left:3px solid var(--blue);margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">#2 · Options — Bull Put Spread</b>
+      <span class="badge b-blue">CONVICTION 74</span>
+      <span class="badge b-zinc">21 AUG 26 · 45 DTE</span>
+      <span class="badge b-green">DEFINED RISK</span>
+      <span style="flex:1"></span>
+      <span class="mono" style="color:var(--muted);font-size:12px">POP 71%</span>
+    </div>
+    <div class="grid cols-5" style="margin-top:12px">
+      <div><div style="color:var(--muted);font-size:12px">Structure</div><div class="mono">SELL 175P / BUY 165P</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Credit</div><div class="mono pos">$2.85 ($285)</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Max loss</div><div class="mono neg">$715</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Breakeven</div><div class="mono">$172.15</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Exit</div><div class="mono">50% profit or 21 DTE</div></div>
+    </div>
+    <hr class="hr">
+    <div style="font-size:13px;color:var(--muted)"><b style="color:var(--text)">Why this structure:</b> Bullish view + IV rank 68 favors premium selling; short strike below invalidation level. <b style="color:var(--text)">Liquidity check:</b> ✓ OI 12.4k/8.1k · spread $0.05.</div>
+  </div>
+
+  <!-- Idea 3 -->
+  <div class="card" style="border-left:3px solid var(--violet);margin-bottom:14px;opacity:.95">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">#3 · Options — Covered Call <span style="color:var(--dim);font-weight:400">(if holding shares)</span></b>
+      <span class="badge b-zinc">CONVICTION 61</span>
+      <span class="badge b-zinc">21 AUG 26</span>
+      <span class="badge b-green">DEFINED RISK</span>
+    </div>
+    <div class="grid cols-5" style="margin-top:12px">
+      <div><div style="color:var(--muted);font-size:12px">Structure</div><div class="mono">SELL 200C vs 100 sh</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Premium</div><div class="mono pos">$4.10 ($410)</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Yield if flat</div><div class="mono">2.2% / 45d</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Called away @</div><div class="mono">$200 (+9.1%)</div></div>
+      <div><div style="color:var(--muted);font-size:12px">Liquidity</div><div class="mono">✓ OI 22.1k · $0.05</div></div>
+    </div>
+  </div>
+
+  <div class="footnote">Levels computed 2026-07-06 16:00 ET from quant layer v0.3 · price snapshot $184.92 · Not financial advice — decision-support output for the account owner.</div>
+</section>
+<!-- ============ SCREEN 2: ACCURACY ============ -->
+<section class="screen" id="s-accuracy">
+  <h1>Accuracy</h1>
+  <p class="sub">Decision quality from the reflection log + backtest harness · trailing 6 months · 74 scored decisions. <span class="warn">Backtests before model knowledge-cutoff may be contaminated; post-cutoff window shown by default.</span></p>
+
+  <div class="grid cols-4">
+    <div class="card kpi"><div class="lbl">Hit rate (all signals)</div><div class="val">61%</div><div class="delta pos">▲ 4pts vs prior 3mo</div></div>
+    <div class="card kpi"><div class="lbl">Avg alpha vs SPY (30d)</div><div class="val pos">+1.8%</div><div class="delta" style="color:var(--muted)">per decision, annualized +14.6%</div></div>
+    <div class="card kpi"><div class="lbl">Simulated Sharpe</div><div class="val">1.12</div><div class="delta" style="color:var(--muted)">TradeIdea backtest, 60 trades</div></div>
+    <div class="card kpi"><div class="lbl">Decisions scored</div><div class="val">74</div><div class="delta" style="color:var(--muted)">12 pending returns</div></div>
+  </div>
+
+  <div class="sect">Methodology comparison — hit rate (backtest, same period)</div>
+  <div class="card">
+    <div class="kv"><span class="k">Ensemble (LLM + quant)</span><span class="mono pos">64%</span></div>
+    <div class="bar" style="margin:4px 0 12px"><div style="width:64%;background:var(--green)"></div></div>
+    <div class="kv"><span class="k">LLM debate only</span><span class="mono">57%</span></div>
+    <div class="bar" style="margin:4px 0 12px"><div style="width:57%;background:var(--blue)"></div></div>
+    <div class="kv"><span class="k">Quant score only</span><span class="mono">54%</span></div>
+    <div class="bar" style="margin:4px 0 12px"><div style="width:54%;background:var(--violet)"></div></div>
+    <div class="kv"><span class="k">Buy-and-hold baseline</span><span class="mono" style="color:var(--dim)">52%</span></div>
+    <div class="bar" style="margin:4px 0 2px"><div style="width:52%;background:var(--border2)"></div></div>
+  </div>
+
+  <div class="grid cols-2" style="margin-top:14px">
+    <div class="card">
+      <div class="sect" style="margin-top:0">By signal class</div>
+      <table>
+        <tr><th>Signal</th><th class="num">N</th><th class="num">Hit</th><th class="num">Avg 30d alpha</th></tr>
+        <tr><td><span class="badge b-green">BUY / OW</span></td><td class="num">31</td><td class="num">68%</td><td class="num pos">+3.1%</td></tr>
+        <tr><td><span class="badge b-amber">HOLD</span></td><td class="num">24</td><td class="num">58%</td><td class="num">+0.4%</td></tr>
+        <tr><td><span class="badge b-red">SELL / UW</span></td><td class="num">19</td><td class="num">53%</td><td class="num neg">−0.9%</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <div class="sect" style="margin-top:0">By ticker (top by volume)</div>
+      <table>
+        <tr><th>Ticker</th><th class="num">N</th><th class="num">Hit</th><th class="num">Alpha</th><th></th></tr>
+        <tr><td class="mono">NVDA</td><td class="num">14</td><td class="num">71%</td><td class="num pos">+4.2%</td><td><span class="badge b-green">STRONG</span></td></tr>
+        <tr><td class="mono">AAPL</td><td class="num">11</td><td class="num">64%</td><td class="num pos">+1.1%</td><td><span class="badge b-green">GOOD</span></td></tr>
+        <tr><td class="mono">TSLA</td><td class="num">9</td><td class="num">44%</td><td class="num neg">−2.3%</td><td><span class="badge b-red">BELOW GATE</span></td></tr>
+        <tr><td class="mono">MSFT</td><td class="num">8</td><td class="num">63%</td><td class="num pos">+0.8%</td><td><span class="badge b-green">GOOD</span></td></tr>
+      </table>
+      <div class="footnote" style="margin-top:10px">“BELOW GATE” tickers fail the execution policy’s trailing-accuracy floor — ideas display but are never auto-executed.</div>
+    </div>
+  </div>
+
+  <div class="sect">Recent reflections</div>
+  <div class="card">
+    <table>
+      <tr><th>Date</th><th>Ticker</th><th>Decision</th><th class="num">30d return</th><th class="num">vs SPY</th><th>Reflection (auto-generated)</th></tr>
+      <tr><td class="mono">06-02</td><td class="mono">NVDA</td><td><span class="badge b-green">BUY</span></td><td class="num pos">+8.4%</td><td class="num pos">+6.1%</td><td style="color:var(--muted)">Fundamentals thesis validated; sentiment lagged price — weight it less on mega-caps.</td></tr>
+      <tr><td class="mono">05-28</td><td class="mono">TSLA</td><td><span class="badge b-red">SELL</span></td><td class="num pos">+5.2%</td><td class="num pos">+2.9%</td><td style="color:var(--muted)">Wrong: over-weighted headline risk from news analyst; delivery beat dominated.</td></tr>
+      <tr><td class="mono">05-21</td><td class="mono">AAPL</td><td><span class="badge b-amber">HOLD</span></td><td class="num">+1.1%</td><td class="num neg">−1.2%</td><td style="color:var(--muted)">Acceptable; debate correctly flagged range-bound setup.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3: COMPARE RUNS ============ -->
+<section class="screen" id="s-compare">
+  <h1>Compare Runs — NVDA</h1>
+  <p class="sub">Run #91c4 (2026-06-01) vs Run #a3f2 (2026-07-06) · same ticker, 5 weeks apart</p>
+
+  <div class="grid cols-2">
+    <div class="card" style="border-top:3px solid var(--border2)">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b>#91c4 · 2026-06-01</b><span class="badge b-amber">HOLD</span></div>
+      <div class="kv" style="margin-top:8px"><span class="k">Ensemble conviction</span><span class="mono">52</span></div>
+      <div class="kv"><span class="k">Cost / duration</span><span class="mono">$0.87 · 6m 12s</span></div>
+      <div class="kv"><span class="k">Models</span><span class="mono" style="font-size:12px">gpt-5.4 / gpt-5.4-mini</span></div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--green)">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b>#a3f2 · 2026-07-06</b><span class="badge b-green">OVERWEIGHT</span></div>
+      <div class="kv" style="margin-top:8px"><span class="k">Ensemble conviction</span><span class="mono pos">78 <span class="pos" style="font-size:11px">▲26</span></span></div>
+      <div class="kv"><span class="k">Cost / duration</span><span class="mono">$0.79 · 3m 41s</span></div>
+      <div class="kv"><span class="k">Models</span><span class="mono" style="font-size:12px">gpt-5.4 / gpt-5.4-mini</span></div>
+    </div>
+  </div>
+
+  <div class="sect">What changed by agent</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th style="width:160px">Agent</th><th>2026-06-01</th><th>2026-07-06</th><th style="width:90px">Shift</th></tr>
+      <tr><td>Market Analyst</td><td style="color:var(--muted)">Downtrend intact below 50-DMA; RSI 41</td><td style="color:var(--muted)">Reclaimed 50-DMA on volume; higher-low structure</td><td><span class="badge b-green">▲ BULLISH</span></td></tr>
+      <tr><td>Sentiment Analyst</td><td style="color:var(--muted)">Net negative; retail capitulation on r/stocks</td><td style="color:var(--muted)">Neutral→positive; StockTwits msg volume +38%</td><td><span class="badge b-green">▲</span></td></tr>
+      <tr><td>News Analyst</td><td style="color:var(--muted)">Export-control overhang dominates coverage</td><td style="color:var(--muted)">License framework resolved; hyperscaler capex raises</td><td><span class="badge b-green">▲</span></td></tr>
+      <tr><td>Fundamentals</td><td style="color:var(--muted)">Q1 beat but guidance conservative</td><td style="color:var(--muted)">Revisions +6% fwd EPS since June</td><td><span class="badge b-green">▲</span></td></tr>
+      <tr><td>Bull vs Bear</td><td style="color:var(--muted)">Bear won on valuation + macro</td><td style="color:var(--muted)">Bull won; bear conceded demand, held valuation point</td><td><span class="badge b-green">FLIP</span></td></tr>
+      <tr><td>Risk debate</td><td style="color:var(--muted)">Conservative prevailed (2–1)</td><td style="color:var(--muted)">Neutral+Aggressive prevailed; sizing capped at 6.1%</td><td><span class="badge b-amber">SHIFT</span></td></tr>
+    </table>
+  </div>
+  <div class="footnote">Shift column is computed by a cheap-model diff of agent reports (quick_think_llm, ~$0.02/comparison).</div>
+</section>
+<!-- ============ SCREEN 4: POSITIONS & ORDERS ============ -->
+<section class="screen" id="s-positions">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+    <h1 style="margin:0">Positions &amp; Orders</h1>
+    <span class="badge b-blue" style="font-size:12px">MODE: PAPER · STAGE 1</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-danger">⏻ KILL SWITCH — cancel all &amp; halt</button>
+  </div>
+  <p class="sub">Alpaca paper account · policy engine v0.2 · last reconciliation 2026-07-07 06:10 ET <span class="pos">✓ clean</span></p>
+
+  <div class="grid cols-4">
+    <div class="card kpi"><div class="lbl">Equity</div><div class="val mono">$103,418</div><div class="delta pos">+3.4% since 06-08</div></div>
+    <div class="card kpi"><div class="lbl">Open risk (Σ stop distance)</div><div class="val mono">2.1%</div><div class="delta" style="color:var(--muted)">cap 4.0%</div></div>
+    <div class="card kpi"><div class="lbl">Daily P&amp;L</div><div class="val mono neg">−$212</div>
+      <div class="bar" style="margin-top:8px"><div style="width:14%;background:var(--red)"></div></div>
+      <div class="delta" style="color:var(--muted)">loss breaker at −$1,500 (14% used)</div></div>
+    <div class="card kpi"><div class="lbl">Positions / cap</div><div class="val mono">4 / 8</div><div class="delta" style="color:var(--muted)">options premium $695 / $3,000 cap</div></div>
+  </div>
+
+  <div class="sect">Open positions</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Instrument</th><th>Qty</th><th class="num">Avg entry</th><th class="num">Last</th><th class="num">Unrl P&amp;L</th><th class="num">Stop / Max loss</th><th>Source run</th><th></th></tr>
+      <tr><td class="mono">NVDA</td><td class="num mono">34</td><td class="num mono">182.10</td><td class="num mono">186.35</td><td class="num mono pos">+$144 (+2.3%)</td><td class="num mono">172.80 (bracket)</td><td class="mono info">#a3f2</td><td><span class="badge b-green">IN PLAN</span></td></tr>
+      <tr><td class="mono">NVDA 21AUG26 175/165 BPS</td><td class="num mono">−1/+1</td><td class="num mono">2.85 cr</td><td class="num mono">2.31</td><td class="num mono pos">+$54</td><td class="num mono">max loss $715</td><td class="mono info">#a3f2</td><td><span class="badge b-green">IN PLAN</span></td></tr>
+      <tr><td class="mono">AAPL</td><td class="num mono">40</td><td class="num mono">241.50</td><td class="num mono">238.20</td><td class="num mono neg">−$132 (−1.4%)</td><td class="num mono">229.90 (bracket)</td><td class="mono info">#88d1</td><td><span class="badge b-green">IN PLAN</span></td></tr>
+      <tr><td class="mono">MSFT</td><td class="num mono">12</td><td class="num mono">512.00</td><td class="num mono">525.40</td><td class="num mono pos">+$161 (+2.6%)</td><td class="num mono">494.00 (bracket)</td><td class="mono info">#7c2e</td><td><span class="badge b-amber">T1 NEAR</span></td></tr>
+    </table>
+  </div>
+
+  <div class="sect">Policy gate — recent evaluations</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Time</th><th>Idea</th><th class="num">Conviction</th><th>Result</th><th>Detail</th></tr>
+      <tr><td class="mono">07-06 16:22</td><td class="mono">NVDA long equity</td><td class="num mono">78</td><td><span class="badge b-green">EXECUTED</span></td><td style="color:var(--muted)">All 7 rules passed · bracket order placed</td></tr>
+      <tr><td class="mono">07-06 16:22</td><td class="mono">NVDA 175/165 BPS</td><td class="num mono">74</td><td><span class="badge b-green">EXECUTED</span></td><td style="color:var(--muted)">All 7 rules passed · liquidity ✓</td></tr>
+      <tr><td class="mono">07-06 16:22</td><td class="mono">NVDA covered call</td><td class="num mono">61</td><td><span class="badge b-red">REJECTED</span></td><td style="color:var(--muted)">Rule 1 failed: conviction 61 &lt; threshold 70</td></tr>
+      <tr><td class="mono">07-02 09:31</td><td class="mono">TSLA short equity</td><td class="num mono">72</td><td><span class="badge b-red">REJECTED</span></td><td style="color:var(--muted)">Rule 2 failed: TSLA trailing hit-rate 44% &lt; 55% floor</td></tr>
+      <tr><td class="mono">07-01 09:30</td><td class="mono">AMD long equity</td><td class="num mono">75</td><td><span class="badge b-red">REJECTED</span></td><td style="color:var(--muted)">Rule 6 failed: earnings blackout (report 07-03)</td></tr>
+    </table>
+  </div>
+
+  <div class="sect">Order lifecycle</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Client order ID</th><th>Order</th><th>Status</th><th class="num">Filled</th><th>Audit</th></tr>
+      <tr><td class="mono" style="color:var(--dim)">a3f2-1-entry</td><td class="mono">BUY 34 NVDA LMT 182.40</td><td><span class="badge b-green">FILLED</span></td><td class="num mono">34 @ 182.10</td><td class="mono info" style="font-size:12px">run→policy→order→fill ✓</td></tr>
+      <tr><td class="mono" style="color:var(--dim)">a3f2-1-stop</td><td class="mono">STP 172.80 (OCO w/ T1 198.00)</td><td><span class="badge b-blue">WORKING</span></td><td class="num mono">—</td><td class="mono info" style="font-size:12px">bracket leg</td></tr>
+      <tr><td class="mono" style="color:var(--dim)">88d1-1-t1</td><td class="mono">SELL 20 AAPL LMT 252.00</td><td><span class="badge b-blue">WORKING</span></td><td class="num mono">—</td><td class="mono info" style="font-size:12px">scale-out leg</td></tr>
+    </table>
+  </div>
+  <div class="footnote">Stage 2 preview: each EXECUTED row becomes an <b>APPROVE / REJECT</b> prompt with a 15-minute timeout → auto-reject. No LLM touches this page's logic.</div>
+</section>
+
+<!-- ============ SCREEN 5: RUN DETAIL + COST ============ -->
+<section class="screen" id="s-run">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+    <h1 style="margin:0">Run #a3f2 — NVDA · 2026-07-06</h1>
+    <span class="badge b-blue">RUNNING · step 9/12</span>
+    <span style="flex:1"></span>
+    <button class="btn">✕ Cancel run</button>
+  </div>
+  <p class="sub">gpt-5.4 (deep) / gpt-5.4-mini (quick) · debate rounds: 1 · started 16:04:12 ET</p>
+
+  <div class="grid cols-3">
+    <div class="card kpi"><div class="lbl">Cost so far</div><div class="val mono">$0.61</div>
+      <div class="bar" style="margin-top:8px"><div style="width:64%;background:var(--blue)"></div></div>
+      <div class="delta" style="color:var(--muted)">projected $0.94 · budget $2.00</div></div>
+    <div class="card kpi"><div class="lbl">Tokens</div><div class="val mono">128k in · 19k out</div><div class="delta" style="color:var(--muted)">across 11 LLM calls</div></div>
+    <div class="card kpi"><div class="lbl">Elapsed</div><div class="val mono">2m 58s</div><div class="delta" style="color:var(--muted)">analysts ran in parallel: 4 steps in 41s</div></div>
+  </div>
+
+  <div class="sect">Pipeline</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th style="width:26px"></th><th>Step</th><th>Model tier</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Time</th><th></th></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>Market Analyst</td><td class="mono" style="color:var(--dim)">quick</td><td class="num mono">14.2k</td><td class="num mono">$0.05</td><td class="num mono">38s</td><td></td></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>Sentiment Analyst</td><td class="mono" style="color:var(--dim)">quick</td><td class="num mono">11.8k</td><td class="num mono">$0.04</td><td class="num mono">33s</td><td><span class="badge b-amber">DEGRADED: stocktwits rate-limited</span></td></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>News Analyst</td><td class="mono" style="color:var(--dim)">quick</td><td class="num mono">16.4k</td><td class="num mono">$0.06</td><td class="num mono">41s</td><td></td></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>Fundamentals Analyst</td><td class="mono" style="color:var(--dim)">quick</td><td class="num mono">13.1k</td><td class="num mono">$0.05</td><td class="num mono">36s</td><td></td></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>Bull ↔ Bear debate (2 calls)</td><td class="mono" style="color:var(--dim)">quick</td><td class="num mono">22.6k</td><td class="num mono">$0.08</td><td class="num mono">29s</td><td></td></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>Research Manager</td><td class="mono info">deep</td><td class="num mono">18.9k</td><td class="num mono">$0.14</td><td class="num mono">26s</td><td></td></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>Trader</td><td class="mono" style="color:var(--dim)">quick</td><td class="num mono">9.7k</td><td class="num mono">$0.04</td><td class="num mono">14s</td><td></td></tr>
+      <tr><td><span style="color:var(--green)">●</span></td><td>Quant layer + ensemble</td><td class="mono" style="color:var(--green)">no LLM</td><td class="num mono">—</td><td class="num mono">$0.00</td><td class="num mono">2s</td><td></td></tr>
+      <tr><td><span style="color:var(--blue)">◐</span></td><td>Risk debate (3 calls)</td><td class="mono" style="color:var(--dim)">quick</td><td class="num mono">21.3k</td><td class="num mono">$0.08</td><td class="num mono">…</td><td><span class="badge b-blue">STREAMING</span></td></tr>
+      <tr><td><span style="color:var(--dim)">○</span></td><td>Portfolio Manager</td><td class="mono info">deep</td><td class="num mono">—</td><td class="num mono">est $0.15</td><td class="num mono">—</td><td></td></tr>
+      <tr><td><span style="color:var(--dim)">○</span></td><td>Trade construction</td><td class="mono" style="color:var(--green)">no LLM</td><td class="num mono">—</td><td class="num mono">$0.00</td><td class="num mono">—</td><td></td></tr>
+      <tr><td><span style="color:var(--dim)">○</span></td><td>Policy gate</td><td class="mono" style="color:var(--green)">no LLM</td><td class="num mono">—</td><td class="num mono">$0.00</td><td class="num mono">—</td><td></td></tr>
+    </table>
+  </div>
+  <div class="footnote">Cancel sends <span class="mono">POST /api/runs/a3f2/cancel</span>; cooperative check between nodes stops within one step. The DEGRADED badge propagates to the run record and blocks auto-execution (policy rule 7).</div>
+</section>
+
+<!-- ============ SCREEN 6: MACRO ENVIRONMENT ============ -->
+<section class="screen" id="s-macro">
+  <h1>Macro Environment</h1>
+  <p class="sub">Weekly regime read (deep_think, Mondays 07:00 ET) + daily indicator refresh (no LLM) · last updated 2026-07-07 07:04 ET</p>
+
+  <div class="card" style="border-left:3px solid var(--green);display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+    <div><div style="font-size:12px;color:var(--muted)">CURRENT REGIME</div><div style="font-size:20px;font-weight:700" class="pos">RISK-ON · moderate</div></div>
+    <div style="flex:1;min-width:280px;color:var(--muted);font-size:13px">Easing cycle intact, curve re-steepening, breadth improving beyond mega-caps. Watch: July CPI (07-14) and the start of Q2 earnings — a hot print flips this to NEUTRAL.</div>
+    <span class="badge b-zinc">confidence 72%</span>
+  </div>
+
+  <div class="grid cols-5" style="margin-top:14px">
+    <div class="card kpi"><div class="lbl">Fed funds</div><div class="val mono">3.25%</div><div class="delta pos">−25bp in June</div></div>
+    <div class="card kpi"><div class="lbl">10Y / 2s10s</div><div class="val mono">3.92%</div><div class="delta pos">+64bp steep</div></div>
+    <div class="card kpi"><div class="lbl">VIX</div><div class="val mono">14.8</div><div class="delta" style="color:var(--muted)">20d avg 16.2</div></div>
+    <div class="card kpi"><div class="lbl">DXY</div><div class="val mono">99.4</div><div class="delta neg">▼ 2.1% / mo</div></div>
+    <div class="card kpi"><div class="lbl">Breadth (SPX &gt;50DMA)</div><div class="val mono">63%</div><div class="delta pos">▲ from 41%</div></div>
+  </div>
+
+  <div class="sect">Sector hit-likelihood — macro tailwind × system accuracy</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Sector</th><th class="num">Macro tailwind</th><th class="num">Our hit rate (6mo)</th><th class="num">Hit likelihood</th><th>Top candidates</th><th></th></tr>
+      <tr><td>Semiconductors</td><td class="num mono">82</td><td class="num mono pos">71%</td><td class="num"><b class="pos">HIGH</b></td><td><span class="chip mono">NVDA</span><span class="chip mono">AVGO</span><span class="chip mono">AMD</span></td><td><button class="btn" style="padding:4px 10px;font-size:12px">Run all</button></td></tr>
+      <tr><td>Software / AI infra</td><td class="num mono">74</td><td class="num mono pos">64%</td><td class="num"><b class="pos">HIGH</b></td><td><span class="chip mono">MSFT</span><span class="chip mono">ORCL</span><span class="chip mono">NOW</span></td><td><button class="btn" style="padding:4px 10px;font-size:12px">Run all</button></td></tr>
+      <tr><td>Financials</td><td class="num mono">68</td><td class="num mono">58%</td><td class="num"><b class="warn">MEDIUM</b></td><td><span class="chip mono">JPM</span><span class="chip mono">GS</span></td><td><button class="btn" style="padding:4px 10px;font-size:12px">Run all</button></td></tr>
+      <tr><td>Homebuilders</td><td class="num mono">71</td><td class="num mono" style="color:var(--dim)">n=2 (thin)</td><td class="num"><b class="warn">MEDIUM*</b></td><td><span class="chip mono">DHI</span><span class="chip mono">LEN</span></td><td><button class="btn" style="padding:4px 10px;font-size:12px">Run all</button></td></tr>
+      <tr><td>Consumer staples</td><td class="num mono">38</td><td class="num mono">52%</td><td class="num"><b style="color:var(--dim)">LOW</b></td><td><span class="chip mono">PG</span><span class="chip mono">KO</span></td><td></td></tr>
+      <tr><td>EV / Autos</td><td class="num mono">41</td><td class="num mono neg">44%</td><td class="num"><b class="neg">AVOID</b></td><td style="color:var(--dim)">below accuracy gate</td><td></td></tr>
+    </table>
+  </div>
+  <div class="footnote">*Thin sample — likelihood shown from macro score only. Hit likelihood = blend of macro tailwind (quant, daily) and trailing system accuracy per sector (Accuracy page). “Run all” queues watchlist-style batch runs; execution policy still gates every resulting idea.</div>
+
+  <div class="sect">Suggested runs today (4)</div>
+  <div class="card">
+    <div class="kv"><span class="mono">AVGO</span><span style="color:var(--muted)">Semis HIGH + earnings 07-10 (pre-blackout window closes tomorrow)</span><button class="btn" style="padding:4px 12px;font-size:12px">Queue</button></div><hr class="hr">
+    <div class="kv"><span class="mono">MSFT</span><span style="color:var(--muted)">Software HIGH + last run 11 days old</span><button class="btn" style="padding:4px 12px;font-size:12px">Queue</button></div><hr class="hr">
+    <div class="kv"><span class="mono">JPM</span><span style="color:var(--muted)">Curve steepening + Financials MEDIUM, no run since regime change</span><button class="btn" style="padding:4px 12px;font-size:12px">Queue</button></div><hr class="hr">
+    <div class="kv"><span class="mono">DHI</span><span style="color:var(--muted)">Rate-cut beneficiary; would build sector sample</span><button class="btn" style="padding:4px 12px;font-size:12px">Queue</button></div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 7: DEEP DIVE ============ -->
+<section class="screen" id="s-deep">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+    <h1 style="margin:0">Deep Dive — Run #a3f2 · NVDA</h1>
+    <span class="badge b-green">OVERWEIGHT · conviction 78</span>
+  </div>
+  <p class="sub">Everything behind the summary: full agent reports, debate transcripts, quant inputs, and data provenance. Click <b class="info">Explain</b> on any section to get a plain-language walkthrough.</p>
+
+  <details open>
+    <summary><span class="badge b-zinc">ANALYST</span> Market Analyst — full report <button class="explain-btn">✦ Explain</button></summary>
+    <div class="body">
+      <table style="margin-bottom:10px">
+        <tr><th>Indicator</th><th class="num">Value</th><th>Read</th></tr>
+        <tr><td class="mono">50 DMA / 200 DMA</td><td class="num mono">178.4 / 162.1</td><td class="pos">price above both; golden-cross intact</td></tr>
+        <tr><td class="mono">RSI(14)</td><td class="num mono">71.2</td><td class="warn">overbought — argues for pullback entries</td></tr>
+        <tr><td class="mono">MACD hist</td><td class="num mono">+1.84</td><td class="pos">expanding</td></tr>
+        <tr><td class="mono">ATR(14)</td><td class="num mono">5.62</td><td>sizing input · stop = 2.0× ATR</td></tr>
+      </table>
+      Reclaimed the 50-DMA on 2.1× average volume on 06-24 and has held it for nine sessions; higher-low structure off the June swing low at $167.90…
+      <div class="qa"><div class="q">✦ AI explain — “What does this report mean for the entry zone?”</div><div class="a">The analyst sees an uptrend but flags RSI 71 — the stock has run hot short-term. That's why the trade idea's entry zone ($181.40–184.20) sits below the last price: the system wants a small pullback rather than chasing. The stop ($172.80) is placed 2× ATR below entry, under both the 50-DMA and the $173 invalidation level, so normal volatility won't shake the position out.</div></div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="badge b-zinc">ANALYST</span> Sentiment Analyst — sources &amp; scores <button class="explain-btn">✦ Explain</button></summary>
+    <div class="body">Net sentiment +0.31 (scale −1…+1) from 412 StockTwits messages (volume +38% w/w, 64% bullish), 28 Reddit threads (r/stocks, r/wallstreetbets — capitulation posts gone, DD posts returning), grounded against 14 news headlines. <span class="warn">Note: StockTwits fetch was rate-limited; score computed on partial sample (280/412) — section flagged DEGRADED.</span></div>
+  </details>
+
+  <details>
+    <summary><span class="badge b-zinc">DEBATE</span> Bull ↔ Bear transcript (round 1) <button class="explain-btn">✦ Explain</button></summary>
+    <div class="body">
+      <p><b class="pos">Bull:</b> Hyperscaler capex guides are up 18% YoY in aggregate; the export-license framework removes the tail risk that justified the June discount. Forward P/E of 31 is below the 3-year median of 35 despite higher growth…</p>
+      <p><b class="neg">Bear:</b> Concede demand visibility has improved. The remaining case is multiple compression if July CPI surprises hot and real yields back up — at 31× a 50bp move in the 10Y matters more than any demand datapoint…</p>
+      <p style="color:var(--dim)">Research Manager ruling: Bull case prevails on evidence quality; bear's macro risk adopted as the invalidation condition rather than a reason to abstain.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="badge b-zinc">QUANT</span> Quant layer — raw scores &amp; inputs <button class="explain-btn">✦ Explain</button></summary>
+    <div class="body">
+      <table>
+        <tr><th>Signal</th><th class="num">Score</th><th>Inputs</th></tr>
+        <tr><td>Momentum</td><td class="num mono">82</td><td class="mono" style="font-size:12px">12-1 mom +34% (87th pct) · 20d slope +0.42</td></tr>
+        <tr><td>Mean reversion</td><td class="num mono">44</td><td class="mono" style="font-size:12px">z(20d) +1.6 — mildly stretched</td></tr>
+        <tr><td>Volatility</td><td class="num mono">61</td><td class="mono" style="font-size:12px">IV rank 68 · RV(20) 31% · term structure normal</td></tr>
+        <tr><td>Valuation</td><td class="num mono">55</td><td class="mono" style="font-size:12px">fwd P/E 31 vs 3y median 35 · PEG 1.1</td></tr>
+      </table>
+      <div style="margin-top:8px">Composite 71 → ensembled with LLM verdict (bullish, strong) → conviction 78. Weights: momentum .35, vol .25, mean-rev .20, valuation .20 (editable in Settings).</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><span class="badge b-zinc">DATA</span> Provenance — feeds, timestamps, cache <button class="explain-btn">✦ Explain</button></summary>
+    <div class="body">
+      <table>
+        <tr><th>Feed</th><th>Vendor</th><th>As-of</th><th>Status</th></tr>
+        <tr><td>OHLCV + indicators</td><td class="mono">yfinance</td><td class="mono">07-06 16:00 ET</td><td><span class="badge b-green">FRESH</span></td></tr>
+        <tr><td>Fundamentals</td><td class="mono">alpha_vantage</td><td class="mono">07-06 (cache 4h)</td><td><span class="badge b-green">CACHED ✓</span></td></tr>
+        <tr><td>Options chain / IV</td><td class="mono">yfinance</td><td class="mono">07-06 15:58 ET</td><td><span class="badge b-green">LIQ ✓</span></td></tr>
+        <tr><td>StockTwits</td><td class="mono">stocktwits</td><td class="mono">07-06 15:40 ET</td><td><span class="badge b-amber">PARTIAL 68%</span></td></tr>
+      </table>
+    </div>
+  </details>
+
+  <div class="sect">Ask about this run</div>
+  <div class="card">
+    <div style="display:flex;gap:8px"><input class="input" style="flex:1" placeholder="e.g. Why is conviction 78 and not higher? What would change the decision to HOLD?"><button class="btn btn-green">Ask</button></div>
+    <div class="qa"><div class="q">You: What's the single biggest risk to this trade?</div><div class="a">Multiple compression from a hot July CPI (07-14) — the bear's surviving argument. The position is built for it: entry below market, stop under the $173 invalidation, and the bull put spread's short strike (175) also sits below that level. If CPI lands hot before entry fills, the macro regime flips to NEUTRAL and the policy engine re-scores the idea. <span style="color:var(--dim)">(answered by quick_think_llm over this run's reports · $0.01)</span></div></div>
+  </div>
+  <div class="footnote">Explain/Ask calls use the cheap model tier over stored run artifacts only — no new data fetches, no effect on the decision record. Answers cite which agent report they draw from.</div>
+</section>
+
+<!-- ============ SCREEN 8: WATCHLISTS ============ -->
+<section class="screen" id="s-watchlists">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+    <h1 style="margin:0">Watchlists</h1>
+    <span style="flex:1"></span>
+    <button class="btn btn-green">+ New watchlist</button>
+  </div>
+  <p class="sub">Each list carries its own analysis triggers. Triggers queue runs; the daily LLM budget and execution policy still apply.</p>
+
+  <div class="card" style="margin-bottom:14px;border-left:3px solid var(--green)">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">AI &amp; Semis</b>
+      <span class="badge b-green">ACTIVE · 3 TRIGGERS</span>
+      <span style="flex:1"></span>
+      <button class="btn" style="padding:5px 12px;font-size:12px">▶ Run all now</button>
+      <button class="btn" style="padding:5px 12px;font-size:12px">Edit</button>
+    </div>
+    <div style="margin:10px 0 4px"><span class="chip mono">NVDA</span><span class="chip mono">AVGO</span><span class="chip mono">AMD</span><span class="chip mono">MSFT</span><span class="chip mono">TSM</span><span class="chip mono">ORCL</span></div>
+    <hr class="hr">
+    <table>
+      <tr><th style="width:120px">Trigger</th><th>Rule</th><th>Last fired</th><th style="width:60px">On</th></tr>
+      <tr><td><span class="badge b-blue">SCHEDULE</span></td><td class="mono" style="color:var(--muted)">Mon &amp; Thu 07:30 ET (cron 30 7 * * 1,4)</td><td class="mono" style="color:var(--dim)">07-06 · 6 runs · $4.90</td><td><span class="toggle on"></span></td></tr>
+      <tr><td><span class="badge b-blue">MACRO</span></td><td style="color:var(--muted)">Sector hit-likelihood becomes HIGH</td><td class="mono" style="color:var(--dim)">06-24 (regime flip)</td><td><span class="toggle on"></span></td></tr>
+      <tr><td><span class="badge b-blue">EVENT</span></td><td style="color:var(--muted)">Earnings within 7 days → run once, respect blackout</td><td class="mono" style="color:var(--dim)">07-03 (AVGO)</td><td><span class="toggle on"></span></td></tr>
+    </table>
+    <div class="footnote" style="margin-top:8px">Last batch: 6/6 complete · 2 ideas passed policy gate · view in <span class="info">History</span></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">Rate-cut beneficiaries</b>
+      <span class="badge b-zinc">1 TRIGGER</span>
+      <span style="flex:1"></span>
+      <button class="btn" style="padding:5px 12px;font-size:12px">▶ Run all now</button>
+      <button class="btn" style="padding:5px 12px;font-size:12px">Edit</button>
+    </div>
+    <div style="margin:10px 0 4px"><span class="chip mono">JPM</span><span class="chip mono">GS</span><span class="chip mono">DHI</span><span class="chip mono">LEN</span><span class="chip mono">O</span></div>
+    <hr class="hr">
+    <table>
+      <tr><td style="width:120px"><span class="badge b-blue">MACRO</span></td><td style="color:var(--muted)">Fed decision day +1 → run all</td><td class="mono" style="color:var(--dim)">last fired 06-18</td><td style="width:60px"><span class="toggle on"></span></td></tr>
+    </table>
+  </div>
+
+  <div class="card" style="opacity:.85">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:15px">Crypto (analysis-only)</b>
+      <span class="badge b-amber">TRIGGERS PAUSED</span>
+      <span class="badge b-zinc">asset_type: crypto</span>
+      <span style="flex:1"></span>
+      <button class="btn" style="padding:5px 12px;font-size:12px">▶ Run all now</button>
+      <button class="btn" style="padding:5px 12px;font-size:12px">Edit</button>
+    </div>
+    <div style="margin:10px 0 4px"><span class="chip mono">BTC-USD</span><span class="chip mono">ETH-USD</span></div>
+    <div class="footnote" style="margin-top:6px">Crypto mode skips the fundamentals analyst; execution is never enabled for this list.</div>
+  </div>
+  <div class="footnote">Queue guard: triggers never start a run if projected day cost &gt; budget ($20) or if the same ticker ran &lt; 18h ago.</div>
+</section>
+
+<!-- ============ SCREEN 9: SETTINGS ============ -->
+<section class="screen" id="s-settings">
+  <h1>Settings</h1>
+  <p class="sub">Every change here is validated, versioned, and appended to the audit log. Execution-critical fields require typed confirmation.</p>
+
+  <div class="sect">Execution policy — rules &amp; thresholds</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Rule</th><th style="width:140px">Value</th><th>Bounds</th><th style="width:90px"></th></tr>
+      <tr><td>1 · Min conviction to execute</td><td><input class="input mono" value="70" style="width:80px"></td><td class="mono" style="color:var(--dim)">50–95</td><td><span class="badge b-green">ACTIVE</span></td></tr>
+      <tr><td>2 · Ticker trailing hit-rate floor</td><td><input class="input mono" value="55%" style="width:80px"></td><td class="mono" style="color:var(--dim)">min n=6</td><td><span class="badge b-green">ACTIVE</span></td></tr>
+      <tr><td>3 · Max risk per trade (% equity)</td><td><input class="input mono" value="0.75%" style="width:80px"></td><td class="mono" style="color:var(--dim)">≤ 1.5% <span class="warn">🔒</span></td><td><span class="badge b-green">ACTIVE</span></td></tr>
+      <tr><td>4 · Max open positions / single-name exposure</td><td><input class="input mono" value="8 / 10%" style="width:100px"></td><td class="mono" style="color:var(--dim)">—</td><td><span class="badge b-green">ACTIVE</span></td></tr>
+      <tr><td>5 · Daily loss circuit breaker</td><td><input class="input mono" value="$1,500" style="width:80px"></td><td class="mono" style="color:var(--dim)">≤ 2% eq <span class="warn">🔒</span></td><td><span class="badge b-green">ACTIVE</span></td></tr>
+      <tr><td>6 · Earnings blackout window</td><td><input class="input mono" value="±2 days" style="width:80px"></td><td class="mono" style="color:var(--dim)">≥ ±1d</td><td><span class="badge b-green">ACTIVE</span></td></tr>
+      <tr><td>7 · Block execution on degraded data</td><td><span class="toggle on"></span></td><td class="mono" style="color:var(--dim)">cannot disable in AUTO <span class="warn">🔒</span></td><td><span class="badge b-green">ACTIVE</span></td></tr>
+    </table>
+  </div>
+  <div class="footnote">🔒 = hard bound enforced in code; the UI cannot exceed it. Changes take effect next policy evaluation — never mid-order. <span class="info">View audit log (14 changes)</span></div>
+
+  <div class="sect">Ensemble weights (quant layer)</div>
+  <div class="card">
+    <div class="grid cols-4">
+      <div><div style="color:var(--muted);font-size:12px;margin-bottom:4px">Momentum</div><input class="input mono" value="0.35" style="width:100%"></div>
+      <div><div style="color:var(--muted);font-size:12px;margin-bottom:4px">Volatility</div><input class="input mono" value="0.25" style="width:100%"></div>
+      <div><div style="color:var(--muted);font-size:12px;margin-bottom:4px">Mean reversion</div><input class="input mono" value="0.20" style="width:100%"></div>
+      <div><div style="color:var(--muted);font-size:12px;margin-bottom:4px">Valuation</div><input class="input mono" value="0.20" style="width:100%"></div>
+    </div>
+    <div class="footnote" style="margin-top:10px">Must sum to 1.00 · weight changes are backtested automatically before save — you'll see projected hit-rate impact first.</div>
+  </div>
+
+  <div class="sect">LLM providers &amp; defaults</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Provider</th><th>Key</th><th>Default deep / quick</th><th class="num">30d spend</th><th></th></tr>
+      <tr><td>OpenAI</td><td><span class="badge b-green">CONNECTED</span></td><td class="mono" style="font-size:12px">gpt-5.4 / gpt-5.4-mini <span class="badge b-blue" style="margin-left:6px">DEFAULT</span></td><td class="num mono">$23.40</td><td><button class="btn" style="padding:4px 10px;font-size:12px">Edit</button></td></tr>
+      <tr><td>Anthropic</td><td><span class="badge b-green">CONNECTED</span></td><td class="mono" style="font-size:12px">claude-opus-4-8 / claude-haiku-4-5</td><td class="num mono">$8.12</td><td><button class="btn" style="padding:4px 10px;font-size:12px">Edit</button></td></tr>
+      <tr><td>Google</td><td><span class="badge b-zinc">NO KEY</span></td><td class="mono" style="font-size:12px;color:var(--dim)">—</td><td class="num mono" style="color:var(--dim)">—</td><td><button class="btn" style="padding:4px 10px;font-size:12px">Add key</button></td></tr>
+      <tr><td>Ollama (local)</td><td><span class="badge b-blue">ENDPOINT SET</span></td><td class="mono" style="font-size:12px">used for Explain/Ask only</td><td class="num mono">$0.00</td><td><button class="btn" style="padding:4px 10px;font-size:12px">Edit</button></td></tr>
+    </table>
+  </div>
+  <div class="card" style="margin-top:10px;display:flex;gap:24px;flex-wrap:wrap">
+    <div><div style="color:var(--muted);font-size:12px;margin-bottom:4px">Per-run budget</div><input class="input mono" value="$2.00" style="width:100px"></div>
+    <div><div style="color:var(--muted);font-size:12px;margin-bottom:4px">Daily budget (all runs)</div><input class="input mono" value="$20.00" style="width:100px"></div>
+    <div><div style="color:var(--muted);font-size:12px;margin-bottom:4px">Debate rounds</div><input class="input mono" value="1" style="width:60px"></div>
+    <div style="flex:1;color:var(--dim);font-size:12px;align-self:end">Keys are stored in GCP Secret Manager (prod) / .env (local) — never displayed after entry. “Add key” shows the gcloud command; the UI never receives the secret value.</div>
+  </div>
+
+  <div class="sect">Trade platforms</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Platform</th><th>Account</th><th>Status</th><th>Mode eligibility</th><th></th></tr>
+      <tr><td>Alpaca — Paper</td><td class="mono" style="color:var(--dim)">PA3X…9F</td><td><span class="badge b-green">CONNECTED ✓</span></td><td><span class="badge b-blue">STAGE 1 · AUTO (PAPER)</span></td><td><button class="btn" style="padding:4px 10px;font-size:12px">Test</button></td></tr>
+      <tr><td>Alpaca — Live</td><td class="mono" style="color:var(--dim)">—</td><td><span class="badge b-zinc">NOT CONNECTED</span></td><td style="color:var(--dim);font-size:12px">locked until Stage 1 soak report approved (≥4 wks clean)</td><td><button class="btn" style="padding:4px 10px;font-size:12px" disabled>Connect</button></td></tr>
+      <tr><td>IBKR</td><td class="mono" style="color:var(--dim)">—</td><td><span class="badge b-zinc">NOT CONNECTED</span></td><td style="color:var(--dim);font-size:12px">adapter available; options breadth</td><td><button class="btn" style="padding:4px 10px;font-size:12px">Connect</button></td></tr>
+    </table>
+  </div>
+  <div class="card" style="margin-top:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <div style="font-size:13px"><b>Execution mode</b></div>
+    <span class="badge b-blue" style="font-size:12px">● PAPER (auto)</span>
+    <span class="badge b-zinc" style="font-size:12px">○ CONFIRM (live) — locked</span>
+    <span class="badge b-zinc" style="font-size:12px">○ AUTO (live) — locked</span>
+    <span style="flex:1"></span>
+    <span style="color:var(--dim);font-size:12px">Mode promotion requires soak-report approval + typed confirmation; separate secret per mode.</span>
+  </div>
+
+  <div class="sect">Data vendors</div>
+  <div class="card" style="padding:0">
+    <table>
+      <tr><th>Vendor</th><th>Key</th><th>Rate limit</th><th>Cache</th></tr>
+      <tr><td>Alpha Vantage</td><td><span class="badge b-green">CONNECTED</span></td><td class="mono" style="color:var(--muted)">25/day used 11</td><td class="mono" style="color:var(--muted)">4h TTL · 92% hit</td></tr>
+      <tr><td>yfinance</td><td><span class="badge b-zinc">NO KEY REQ</span></td><td class="mono" style="color:var(--muted)">adaptive backoff</td><td class="mono" style="color:var(--muted)">EOD snapshot</td></tr>
+      <tr><td>StockTwits / Reddit</td><td><span class="badge b-green">OK</span></td><td class="mono warn">degraded 2× this wk</td><td class="mono" style="color:var(--muted)">15m TTL</td></tr>
+    </table>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:18px;align-items:center">
+    <button class="btn btn-green">Save changes</button>
+    <button class="btn">Discard</button>
+    <span style="color:var(--dim);font-size:12px">2 unsaved changes · saving appends to audit log with before/after values</span>
+  </div>
+</section>
+</main>
+<script>
+document.getElementById('nav').addEventListener('click',e=>{
+  if(e.target.tagName!=='BUTTON')return;
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b===e.target));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id==='s-'+e.target.dataset.s));
+  window.scrollTo(0,0);
+});
+</script>
+</body>
+</html>
