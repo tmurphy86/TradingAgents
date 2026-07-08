@@ -16,6 +16,9 @@ name: Deploy
 #   GCP_REGION                      — e.g. us-central1
 #   GCP_IMAGE_REPO                  — terraform output artifact_registry_repo
 #   GCP_CLOUD_RUN_SERVICE           — Cloud Run service name (tradingagents)
+#
+# Note: the Cloud Run service URL is obtained automatically from the deploy
+# step's output and does not need to be stored as a separate variable.
 
 on:
   push:
@@ -104,13 +107,16 @@ jobs:
     name: Deploy to Cloud Run
     runs-on: ubuntu-latest
     needs: build-and-push
+    outputs:
+      service_url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
 
-      - uses: google-github-actions/deploy-cloudrun@v2
+      - id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
           image: ${{ vars.GCP_IMAGE_REPO }}/app:${{ github.sha }}
@@ -131,13 +137,13 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
           token_format: 'id_token'
-          id_token_audience: ${{ vars.GCP_SERVICE_URL }}
+          id_token_audience: ${{ needs.deploy.outputs.service_url }}
           id_token_include_email: true
 
       - name: Poll /health endpoint
         id: health
         run: |
-          SERVICE_URL="${{ vars.GCP_SERVICE_URL }}"
+          SERVICE_URL="${{ needs.deploy.outputs.service_url }}"
           echo "Service URL: $SERVICE_URL"
           for i in $(seq 1 12); do
             CODE=$(curl -s -o /dev/null -w "%{http_code}" \
