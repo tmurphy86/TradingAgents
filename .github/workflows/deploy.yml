@@ -10,6 +10,13 @@ name: Deploy
 #   merge commit with a different SHA — a promotion attempt would look for
 #   an image at a SHA that never existed in the registry.
 #
+# Rollback model:
+#   Deploys use immutable :SHA images. Before each deploy we capture the
+#   currently-serving Cloud Run revision; if the post-deploy health check
+#   fails we shift 100% of traffic back to that revision. This pulls no
+#   image (the revision already pins its own digest), so rollback can never
+#   fail on a missing tag — and Terraform only ever sees real :SHA images.
+#
 # Required GitHub Actions variables (set in repo Settings → Variables):
 #   GCP_WORKLOAD_IDENTITY_PROVIDER  — terraform output workload_identity_provider
 #   GCP_DEPLOY_SA                   — terraform output github_deploy_sa
@@ -61,8 +68,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 2. Build the production image and push to Artifact Registry.
-  #    Runs only after tests pass.
-  #    Tags current :latest as :previous first to enable one-click rollback.
+  #    Runs only after tests pass. Images are immutable :SHA (+ :latest as a
+  #    convenience pointer). Rollback no longer depends on a mutable tag.
   # ---------------------------------------------------------------------------
   build-and-push:
     name: Build & push to Artifact Registry
@@ -81,13 +88,6 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
 
-      - name: Tag :latest as :previous (enables rollback)
-        run: |
-          gcloud artifacts docker tags add \
-            ${{ vars.GCP_IMAGE_REPO }}/app:latest \
-            ${{ vars.GCP_IMAGE_REPO }}/app:previous \
-            --quiet 2>/dev/null || true
-
       - name: Build and push production image
         uses: docker/build-push-action@v6
         with:
@@ -102,6 +102,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 3. Deploy the new image to Cloud Run.
+  #    Captures the currently-serving revision first so the health-check job
+  #    can roll traffic back to it without redeploying an image.
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy to Cloud Run
@@ -109,11 +111,21 @@ jobs:
     needs: build-and-push
     outputs:
       service_url: ${{ steps.deploy.outputs.url }}
+      prev_revision: ${{ steps.prev.outputs.revision }}
     steps:
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - id: prev
+        name: Capture currently-serving revision (rollback target)
+        run: |
+          REV=$(gcloud run services describe ${{ vars.GCP_CLOUD_RUN_SERVICE }} \
+            --region ${{ vars.GCP_REGION }} \
+            --format='value(status.latestReadyRevisionName)' 2>/dev/null || true)
+          echo "revision=$REV" >> "$GITHUB_OUTPUT"
+          echo "Previous ready revision: ${REV:-<none — first deploy>}"
 
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
@@ -124,7 +136,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 4. Health check — polls /health for up to 120s.
-  #    On failure: auto-rolls back to :previous and opens a GitHub issue.
+  #    On failure: rolls traffic back to the previous revision and opens an issue.
   # ---------------------------------------------------------------------------
   health-check:
     name: Health check & rollback
@@ -158,21 +170,29 @@ jobs:
           exit 1
         continue-on-error: true
 
-      - name: Rollback to :previous on failure
-        if: steps.health.outcome == 'failure'
+      - name: Roll traffic back to previous revision on failure
+        if: steps.health.outcome == 'failure' && needs.deploy.outputs.prev_revision != ''
         run: |
-          echo "Rolling back to :previous..."
-          gcloud run deploy ${{ vars.GCP_CLOUD_RUN_SERVICE }} \
-            --image ${{ vars.GCP_IMAGE_REPO }}/app:previous \
+          echo "Rolling traffic back to ${{ needs.deploy.outputs.prev_revision }}..."
+          gcloud run services update-traffic ${{ vars.GCP_CLOUD_RUN_SERVICE }} \
             --region ${{ vars.GCP_REGION }} \
+            --to-revisions=${{ needs.deploy.outputs.prev_revision }}=100 \
             --quiet
           echo "Rollback complete."
+
+      - name: Warn when no rollback target (first deploy)
+        if: steps.health.outcome == 'failure' && needs.deploy.outputs.prev_revision == ''
+        run: echo "::warning::Health check failed but there is no previous revision to roll back to (first deploy)."
 
       - name: Open GitHub issue on rollback
         if: steps.health.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
+            const prev = `${{ needs.deploy.outputs.prev_revision }}`;
+            const rolledBack = prev
+              ? `The service was automatically rolled back to revision \`${prev}\`.`
+              : 'No previous revision existed, so no rollback was performed — the service may be serving a broken revision.';
             await github.rest.issues.create({
               ...context.repo,
               title: `Deploy rollback triggered — ${context.sha.slice(0, 7)}`,
@@ -180,7 +200,7 @@ jobs:
                 '## Deploy Health Check Failed',
                 '',
                 `Cloud Run failed \`/health\` after deploying commit \`${context.sha}\`.`,
-                'The service was automatically rolled back to \`:previous\`.',
+                rolledBack,
                 '',
                 `**Commit:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/commit/${context.sha}`,
                 `**Workflow run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
