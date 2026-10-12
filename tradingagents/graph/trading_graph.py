@@ -58,6 +58,15 @@ _DEBATE_FIELDS = [
 ]
 
 
+class RunCancelled(Exception):
+    """Raised by ``propagate`` when its ``cancel_event`` is set mid-run.
+
+    Cancellation is cooperative: the event is checked between streamed graph
+    steps, so the node that is in flight finishes and no further node starts.
+    A cancelled run writes no state log and stores no decision.
+    """
+
+
 class TradingAgentsGraph:
     """Main class that orchestrates the trading agents framework."""
 
@@ -335,7 +344,14 @@ class TradingAgentsGraph:
                     }
                 )
 
-    def propagate(self, company_name, trade_date, asset_type: str = "stock", event_callback=None):
+    def propagate(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        event_callback=None,
+        cancel_event=None,
+    ):
         """Run the trading agents graph for a company on a specific date.
 
         ``asset_type`` selects between the stock pipeline (default) and the
@@ -344,8 +360,17 @@ class TradingAgentsGraph:
         ``checkpoint_enabled`` is set in config, the graph is recompiled with
         a per-ticker SqliteSaver so a crashed run can resume from the last
         successful node on a subsequent invocation with the same ticker+date.
+
+        ``cancel_event`` is an optional ``threading.Event``. When supplied the
+        graph is streamed and the event is checked before the run starts and
+        after every graph step; once set, ``RunCancelled`` is raised before the
+        next node runs. Omitting it (the default) leaves behaviour unchanged.
         """
         self.ticker = company_name
+
+        # Don't spend tokens on reflection for a run that is already cancelled.
+        if cancel_event is not None and cancel_event.is_set():
+            raise RunCancelled(f"Run for {company_name} on {trade_date} was cancelled")
 
         # Resolve any pending memory-log entries for this ticker before the pipeline runs.
         self._resolve_pending_entries(company_name)
@@ -364,7 +389,11 @@ class TradingAgentsGraph:
 
         try:
             return self._run_graph(
-                company_name, trade_date, asset_type=asset_type, event_callback=event_callback
+                company_name,
+                trade_date,
+                asset_type=asset_type,
+                event_callback=event_callback,
+                cancel_event=cancel_event,
             )
         finally:
             if self._checkpointer_ctx is not None:
@@ -372,8 +401,19 @@ class TradingAgentsGraph:
                 self._checkpointer_ctx = None
                 self.graph = self.workflow.compile()
 
-    def _run_graph(self, company_name, trade_date, asset_type: str = "stock", event_callback=None):
-        """Execute the graph and write the resulting state to disk and memory log."""
+    def _run_graph(
+        self,
+        company_name,
+        trade_date,
+        asset_type: str = "stock",
+        event_callback=None,
+        cancel_event=None,
+    ):
+        """Execute the graph and write the resulting state to disk and memory log.
+
+        With a ``cancel_event`` the graph is always streamed so the event can be
+        checked between steps; ``RunCancelled`` is raised as soon as it is set.
+        """
         # Initialize state — inject memory log context for PM.
         past_context = self.memory_log.get_past_context(company_name)
         init_agent_state = self.propagator.create_initial_state(
@@ -386,13 +426,29 @@ class TradingAgentsGraph:
             tid = thread_id(company_name, str(trade_date))
             args.setdefault("config", {}).setdefault("configurable", {})["thread_id"] = tid
 
-        if event_callback:
+        if event_callback or cancel_event is not None:
             prev_state: Dict[str, Any] = {}
             final_state: Dict[str, Any] = {}
-            for state in self.graph.stream(init_agent_state, **args):
-                self._emit_state_events(state, prev_state, event_callback)
-                prev_state = state
-                final_state = state
+            cancelled = cancel_event is not None and cancel_event.is_set()
+            if not cancelled:
+                # graph.stream() is lazy: the next node only runs when the next
+                # snapshot is requested, so leaving the loop stops the pipeline.
+                stream = self.graph.stream(init_agent_state, **args)
+                try:
+                    for state in stream:
+                        if event_callback:
+                            self._emit_state_events(state, prev_state, event_callback)
+                        prev_state = state
+                        final_state = state
+                        if cancel_event is not None and cancel_event.is_set():
+                            cancelled = True
+                            break
+                finally:
+                    close = getattr(stream, "close", None)
+                    if close is not None:
+                        close()
+            if cancelled:
+                raise RunCancelled(f"Run for {company_name} on {trade_date} was cancelled")
         elif self.debug:
             trace = []
             for chunk in self.graph.stream(init_agent_state, **args):
