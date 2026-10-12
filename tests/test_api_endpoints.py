@@ -185,6 +185,31 @@ class TestRunDelete:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/runs/{id}/cancel
+# (cancelling a live run is covered end-to-end in tests/test_run_cancel.py)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+class TestRunCancel:
+    def test_cancel_missing_returns_404(self, client):
+        assert client.post("/api/runs/no-such/cancel").status_code == 404
+
+    @pytest.mark.parametrize("status", ["complete", "error", "cancelled"])
+    def test_cancel_finished_run_returns_409(self, client, tmp_path, status):
+        _seed_run("fin-1", status=status)
+        assert client.post("/api/runs/fin-1/cancel").status_code == 409
+        # The finished record is left exactly as it was.
+        assert _run_records["fin-1"]["status"] == status
+        assert json.loads((tmp_path / "runs" / "fin-1.json").read_text())["status"] == status
+
+    def test_cancel_orphaned_running_run_returns_409(self, client):
+        """'running' on disk but no live worker (server restarted): nothing to cancel."""
+        _seed_run("orphan-2", status="running")
+        assert client.post("/api/runs/orphan-2/cancel").status_code == 409
+
+
+# ---------------------------------------------------------------------------
 # GET /api/runs/{id}/stream
 # ---------------------------------------------------------------------------
 

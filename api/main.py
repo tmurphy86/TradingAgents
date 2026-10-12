@@ -15,7 +15,7 @@ from pydantic import BaseModel, field_validator
 
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.graph.trading_graph import RunCancelled, TradingAgentsGraph
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,14 @@ VALID_ANALYSTS = {"market", "social", "news", "fundamentals"}
 # In-memory state: run records + per-run async queues
 _run_records: dict[str, dict] = {}
 _run_queues: dict[str, asyncio.Queue] = {}
+# Per-run cancel flags. Present only while the run's worker thread is alive;
+# set by the cancel/delete endpoints, polled by the graph between steps.
+_run_cancels: dict[str, threading.Event] = {}
+# Serialises a worker's terminal record write against DELETE, so a deleted
+# run's file can never be recreated by its worker.
+_runs_lock = threading.Lock()
+
+_FINISHED_STATUSES = ("complete", "error", "cancelled")
 
 app = FastAPI(title="TradingAgents API", version="0.3.0")
 
@@ -162,6 +170,7 @@ def _safe_dict(v: Any) -> Any:
 def _execute_run(run_id: str, req: RunRequest, loop: asyncio.AbstractEventLoop) -> None:
     """Runs in a daemon thread; puts SSE events onto the asyncio queue."""
     q = _run_queues.get(run_id)
+    cancel_event = _run_cancels.get(run_id)
 
     def emit(event: dict) -> None:
         # Accumulate events on the record for replay on reconnect
@@ -169,6 +178,18 @@ def _execute_run(run_id: str, req: RunRequest, loop: asyncio.AbstractEventLoop) 
         if record is not None:
             record.setdefault("events", []).append(event)
         if q is not None:
+            loop.call_soon_threadsafe(q.put_nowait, event)
+
+    def finish(update: dict, event: dict) -> None:
+        """Write the run's terminal state. No-op if the run was deleted meanwhile."""
+        with _runs_lock:
+            record = _run_records.get(run_id)
+            if record is None:
+                return
+            record.update(update)
+            record.setdefault("events", []).append(event)
+            _save_run(run_id)
+        if q:
             loop.call_soon_threadsafe(q.put_nowait, event)
 
     try:
@@ -185,7 +206,11 @@ def _execute_run(run_id: str, req: RunRequest, loop: asyncio.AbstractEventLoop) 
 
         ta = TradingAgentsGraph(selected_analysts=req.analysts, config=config)
         final_state, decision = ta.propagate(
-            req.ticker, req.date, asset_type=req.asset_type, event_callback=emit
+            req.ticker,
+            req.date,
+            asset_type=req.asset_type,
+            event_callback=emit,
+            cancel_event=cancel_event,
         )
 
         result: dict = {
@@ -203,33 +228,29 @@ def _execute_run(run_id: str, req: RunRequest, loop: asyncio.AbstractEventLoop) 
             "risk_debate_state": _safe_dict(dict(final_state.get("risk_debate_state") or {})),
         }
 
-        complete_event = {"type": "run_complete", "decision": decision, "result": result}
-        record = _run_records.get(run_id, {})
-        record.update(
+        finish(
             {
                 "status": "complete",
                 "completed_at": datetime.utcnow().isoformat(),
                 "result": result,
-            }
+            },
+            {"type": "run_complete", "decision": decision, "result": result},
         )
-        record.setdefault("events", []).append(complete_event)
-        _save_run(run_id)
-        if q:
-            loop.call_soon_threadsafe(q.put_nowait, complete_event)
 
+    except RunCancelled:
+        logger.info("Run %s cancelled", run_id)
+        finish(
+            {"status": "cancelled", "completed_at": datetime.utcnow().isoformat()},
+            {"type": "run_cancelled"},
+        )
     except Exception as e:
         logger.exception("Run %s failed", run_id)
-        error_event = {"type": "run_error", "message": str(e)}
-        record = _run_records.get(run_id, {})
-        record.update({"status": "error", "error": str(e)})
-        record.setdefault("events", []).append(error_event)
-        _save_run(run_id)
-        if q:
-            loop.call_soon_threadsafe(q.put_nowait, error_event)
+        finish({"status": "error", "error": str(e)}, {"type": "run_error", "message": str(e)})
     finally:
         if q:
             loop.call_soon_threadsafe(q.put_nowait, None)  # sentinel
         _run_queues.pop(run_id, None)
+        _run_cancels.pop(run_id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +284,7 @@ async def create_run(req: RunRequest) -> dict:
     run_id = str(uuid.uuid4())
     q: asyncio.Queue = asyncio.Queue()
     _run_queues[run_id] = q
+    _run_cancels[run_id] = threading.Event()
 
     record: dict = {
         "run_id": run_id,
@@ -307,10 +329,30 @@ async def delete_run(run_id: str) -> dict:
     record = _get_run_record(run_id)
     if not record:
         raise HTTPException(404, "Run not found")
-    _run_records.pop(run_id, None)
-    _run_queues.pop(run_id, None)
-    _runs_file(run_id).unlink(missing_ok=True)
+    with _runs_lock:
+        # Cancel first so a live worker stops before its next graph step; it
+        # finds no record when it winds down and therefore writes nothing.
+        cancel_event = _run_cancels.get(run_id)
+        if cancel_event is not None:
+            cancel_event.set()
+        _run_records.pop(run_id, None)
+        _run_queues.pop(run_id, None)
+        _runs_file(run_id).unlink(missing_ok=True)
     return {"deleted": run_id}
+
+
+@app.post("/api/runs/{run_id}/cancel")
+async def cancel_run(run_id: str) -> dict:
+    record = _get_run_record(run_id)
+    if not record:
+        raise HTTPException(404, "Run not found")
+    cancel_event = _run_cancels.get(run_id)
+    if record["status"] in _FINISHED_STATUSES or cancel_event is None:
+        raise HTTPException(409, f"Run is not in progress (status: {record['status']})")
+    # Cooperative: the worker notices between graph steps and persists the
+    # cancelled record itself.
+    cancel_event.set()
+    return {"run_id": run_id, "status": "cancelling"}
 
 
 @app.get("/api/runs/{run_id}/stream")
@@ -333,7 +375,7 @@ async def stream_run(run_id: str) -> StreamingResponse:
         for ev in stored_events:
             yield f"data: {json.dumps(ev)}\n\n"
 
-        if record["status"] in ("complete", "error"):
+        if record["status"] in _FINISHED_STATUSES:
             yield f"data: {json.dumps({'type': 'stream_end'})}\n\n"
             return
 
