@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api } from '../api';
-import type { RunRecord } from '../types';
+import { api, ApiError } from '../api';
+import type { RunRecord, RunStatus } from '../types';
 
 const PIPELINE = [
   { key: 'market_analyst',      name: 'Market Analyst',      phase: 'Analysis',          field: 'market_report' },
@@ -128,8 +128,13 @@ export default function RunPage() {
   );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [finalDecision, setFinalDecision] = useState('');
-  const [runStatus, setRunStatus] = useState<'running' | 'complete' | 'error' | 'loading'>('loading');
+  const [runStatus, setRunStatus] = useState<RunStatus | 'loading'>('loading');
   const [errorMsg, setErrorMsg] = useState('');
+  // True from the Cancel click until the run reaches a terminal status — cancellation
+  // is cooperative, so the run keeps 'running' for a while after the POST returns.
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const [cancelNotice, setCancelNotice] = useState('');
   const [tick, setTick] = useState(0);
   const esRef = useRef<EventSource | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -203,6 +208,20 @@ export default function RunPage() {
         } else if (event.type === 'run_error') {
           setErrorMsg(event.message ?? 'Run failed');
           setRunStatus('error');
+        } else if (event.type === 'run_cancelled') {
+          setRunStatus('cancelled');
+          setCancelError('');
+          // The agent that was up next never started — stop showing it as running
+          setAgents(prev => {
+            const next = { ...prev };
+            for (const p of PIPELINE) {
+              if (next[p.key]?.status === 'running') {
+                next[p.key] = { ...next[p.key], status: 'pending' };
+              }
+            }
+            return next;
+          });
+          api.getRun(runId).then(setRun).catch(() => {});
         } else if (event.type === 'stream_end') {
           es.close();
         }
@@ -228,6 +247,32 @@ export default function RunPage() {
     };
   }, [runId, markAgentComplete]);
 
+  async function handleCancel() {
+    if (!runId || cancelling) return;
+    setCancelling(true);
+    setCancelError('');
+    setCancelNotice('');
+    try {
+      // On success keep the button disabled; the `run_cancelled` event flips the status.
+      await api.cancelRun(runId);
+    } catch (err: any) {
+      setCancelling(false);
+      if (err instanceof ApiError && err.status === 409) {
+        // The run finished before the cancel landed — show its real status instead of an error
+        try {
+          const r = await api.getRun(runId);
+          setRun(r);
+          setRunStatus(r.status);
+          if (r.status === 'running') setCancelNotice('This run can no longer be cancelled.');
+        } catch {
+          setCancelNotice('This run has already finished.');
+        }
+      } else {
+        setCancelError(`Could not cancel the run: ${err?.message || 'request failed'}`);
+      }
+    }
+  }
+
   function toggleExpand(key: string) {
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
   }
@@ -236,6 +281,7 @@ export default function RunPage() {
     running: 'bg-blue-950 text-blue-400 border border-blue-800',
     complete: 'bg-emerald-950 text-emerald-400 border border-emerald-800',
     error: 'bg-red-950 text-red-400 border border-red-800',
+    cancelled: 'bg-zinc-800 text-zinc-300 border border-zinc-600',
     loading: 'bg-zinc-800 text-zinc-400 border border-zinc-700',
   }[runStatus];
 
@@ -263,7 +309,7 @@ export default function RunPage() {
               {run?.ticker ?? '…'}
             </h1>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusBadge}`}>
-              {runStatus === 'loading' ? 'Loading' : runStatus}
+              {runStatus === 'loading' ? 'Loading' : runStatus === 'cancelled' ? 'Cancelled' : runStatus}
             </span>
           </div>
           <p className="text-zinc-500 text-sm">
@@ -278,15 +324,40 @@ export default function RunPage() {
             )}
           </p>
         </div>
-        <Link to="/history" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
-          ← History
-        </Link>
+        <div className="flex items-center gap-4">
+          {runStatus === 'running' && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="text-sm px-3 py-1.5 rounded-md border border-zinc-700 text-zinc-300 hover:text-red-400 hover:border-red-800 hover:bg-red-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-zinc-300 disabled:hover:border-zinc-700 disabled:hover:bg-transparent"
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
+          )}
+          <Link to="/history" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
+            ← History
+          </Link>
+        </div>
       </div>
 
       {/* Error banner */}
       {errorMsg && (
         <div className="bg-red-950 border border-red-800 text-red-300 rounded-md px-4 py-3 text-sm mb-4">
           {errorMsg}
+        </div>
+      )}
+
+      {/* Cancel request failed */}
+      {cancelError && (
+        <div className="bg-red-950 border border-red-800 text-red-300 rounded-md px-4 py-3 text-sm mb-4">
+          {cancelError}
+        </div>
+      )}
+
+      {/* Cancel was too late (409) — informational, not an error */}
+      {cancelNotice && (
+        <div className="bg-zinc-900 border border-zinc-800 text-zinc-400 rounded-md px-4 py-3 text-sm mb-4">
+          {cancelNotice}
         </div>
       )}
 

@@ -27,6 +27,7 @@ function statusBadge(status: string) {
     running:  'bg-blue-950 text-blue-400 border border-blue-800',
     complete: 'bg-emerald-950 text-emerald-400 border border-emerald-800',
     error:    'bg-red-950 text-red-400 border border-red-800',
+    cancelled: 'bg-zinc-800 text-zinc-300 border border-zinc-600',
   };
   return map[status] ?? 'bg-zinc-800 text-zinc-400';
 }

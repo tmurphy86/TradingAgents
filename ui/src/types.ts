@@ -10,11 +10,13 @@ export interface RunRequest {
   asset_type: 'stock' | 'crypto';
 }
 
+export type RunStatus = 'running' | 'complete' | 'error' | 'cancelled';
+
 export interface RunRecord {
   run_id: string;
   ticker: string;
   date: string;
-  status: 'running' | 'complete' | 'error';
+  status: RunStatus;
   started_at: string;
   completed_at: string | null;
   config: RunRequest;
