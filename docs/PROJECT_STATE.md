@@ -7,13 +7,13 @@
 > **Hard cap: keep this file under ~70 lines.**
 
 ## Current milestone
-**Phase 0 — quick wins.** Repo was idle 2026-07-08 → 2026-10-12; a code audit on 2026-10-12 found no IMPROVEMENT_PLAN workstream started. Lifecycle-os migrated to v1.0.0-rc.3 (tickets are GitHub issues, `make` targets, PR delivery, auto-merge when green). Tickets #8–#16 cut in milestone `P0 — Quick wins`, awaiting Tim's approval before dispatch. Dispatch order (bugs first per the bug gate): #8 CI auto-fix → #9 cancel → #10 cancel UI → #11 hygiene → #12 terraform output → #13 cost → #14 cost UI → #16 lifecycle smoke → #15 UI gate.
+**Phase 0 — quick wins** (milestone `P0 — Quick wins`). Bugs #8 and #9 are fixed and deployed; the bug gate is clear. #11 and #10 are in PRs. Remaining dispatch order: #12 terraform output → #13 cost → #14 cost UI → #16 lifecycle smoke → #15 UI gate.
 
 ## Phase status (mirrors README status table — keep in sync)
 | Phase | Scope | Status |
 |---|---|---|
 | Shipped | 12-agent pipeline, dashboard, reflection loop, GCP deploy + CI/CD | SHIPPED |
-| P0 | Hygiene removals, run cancel, cost capture skeleton, UI lint/test gate | TICKETS CUT (#8–#16), NOT DISPATCHED |
+| P0 | Hygiene removals, run cancel, cost capture skeleton, UI lint/test gate | IN PROGRESS — #8, #9 shipped; #10, #11 in PR; #12–#16 open |
 | P1 | Full cost pipeline, parallel analysts, fetch wrapper + snapshot mode, accuracy metrics endpoint | PLANNED |
 | P2 | Accuracy dashboard + point-in-time backtest harness, UX slate, observability | PLANNED |
 | P3 | Quant ensemble, TradeIdea construction, options; macro screener, settings/policy UI | PLANNED |
@@ -27,13 +27,17 @@
 - **Infra:** `terraform apply` human-only; deploy metadata belongs to GitHub Actions (see INCIDENTS 2026-07-08). Protected paths (`terraform/**`, `.github/workflows/**`, `tradingagents/execution/**`) are owner-merge even though Merge is auto-when-green.
 
 ## In flight
-None. Open bugs: #8 (CI `[skip ci]` leak suppresses deploy on squash merge; protected path, owner merge), #9 (delete does not stop a running run).
+- PR #21 (#11 hygiene removals): reviewed, CI green, waiting for merge. Breaking: `POST /analyze` returns 404 once deployed.
+- PR #22 (#10 cancel button): reviewed, build green, **never exercised in a browser**. #10 is `status:partial` until someone records cancelling a real local run.
 
 ## Blockers / DECISION NEEDED
-- Tim: approve tickets #8–#16 for dispatch.
-- PR #7's merge triggered no Deploy or Terraform run (see #8). Until #8 lands, check that a Deploy run starts after every merge.
+- Tim: merge PR #21 and PR #22. The eng-lead session's merge of #21 was blocked by the permission check, so auto-when-green did not happen.
+- #12 and #15 touch protected paths (owner merge). After #11 deploys, `terraform output analyze_curl` points at a removed route until #12 lands.
+- CI auto-remediate still pushes to the PR branch when the test job fails; which token it uses is unverified (see #8).
+- Deep links to `/runs/<id>` return 404 from the built app (static mount has no SPA fallback), so a refresh on a run page breaks. Not ticketed.
 - Verify assumption A6 (Alpaca options approval levels/API support) before any Phase 3+ options ticket.
 
 ## Session log (recent only — archive the rest)
+- 2026-10-12 (eng lead): shipped #9 run cancel (PR #18) and #8 read-only lint (PR #19, owner-merged; evidence PR #20 closed unmerged); both deployed green. #11 → PR #21, #10 → PR #22. #11 went to `senior-coder` because no domain agent owns `api/`.
 - 2026-10-12: state audit; migrated to lifecycle-os v1.0.0-rc.3; Makefile added; legacy BACKLOG/ISSUES archived (both were empty templates, nothing migrated); drift-detection workflow found disabled for inactivity and re-enabled (manual run green); P0 tickets #8–#16 cut.
 - 2026-07-12: lifecycle-os v0.2.0 adopted; state docs created (Cowork session).
