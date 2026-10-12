@@ -239,7 +239,6 @@ messages  # LangGraph MessagesState (cleared between phases)
 
 ```
 TradingAgents/
-├── main.py                          # Minimal programmatic entry point
 ├── pyproject.toml                   # Package metadata and dependencies (v0.2.5)
 ├── Dockerfile                       # CLI image (interactive terminal, uv-based)
 ├── docker-compose.yml               # CLI + API services; ollama profile
@@ -543,13 +542,7 @@ curl -X POST \
   -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
   -H "Content-Type: application/json" \
   -d '{"ticker":"NVDA","date":"2026-01-15","llm_provider":"openai"}' \
-  $URL/analyze
-```
-
-Or use the pre-built command from Terraform output:
-
-```bash
-terraform output -raw analyze_curl | bash
+  $URL/api/runs
 ```
 
 ### Accessing Persistent Data
