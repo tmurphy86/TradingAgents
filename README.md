@@ -78,9 +78,11 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
 config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "openai"          # 13 providers: openai, anthropic, google, xai, deepseek, qwen[-cn], glm[-cn], minimax[-cn], openrouter, ollama, azure
-config["deep_think_llm"] = "gpt-5.4"       # research + portfolio manager
-config["quick_think_llm"] = "gpt-5.4-mini" # everyone else
+config["llm_provider"] = (
+    "openai"  # 13 providers: openai, anthropic, google, xai, deepseek, qwen[-cn], glm[-cn], minimax[-cn], openrouter, ollama, azure
+)
+config["deep_think_llm"] = "gpt-5.4"  # research + portfolio manager
+config["quick_think_llm"] = "gpt-5.4-mini"  # everyone else
 config["max_debate_rounds"] = 1
 
 ta = TradingAgentsGraph(debug=True, config=config)
