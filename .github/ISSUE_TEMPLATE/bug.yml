@@ -1,0 +1,22 @@
+name: Bug
+description: Something broke or behaved wrong. A title and a sentence is enough — the eng lead does the rest.
+labels: ["bug"]
+body:
+  - type: input
+    id: where
+    attributes: { label: Where, description: "Page / feature / command" }
+  - type: textarea
+    id: what
+    attributes: { label: What happened }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected }
+  - type: textarea
+    id: output
+    attributes: { label: Error output (paste raw), render: text }
+  - type: checkboxes
+    id: reopen
+    attributes:
+      label: Reopen?
+      options: [{ label: "This was fixed before (triage runs the reopen protocol)" }]

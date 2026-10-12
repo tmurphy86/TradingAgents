@@ -4,15 +4,18 @@ Multi-agent LLM trading framework: LangGraph pipeline + FastAPI/SSE backend + Re
 
 ## Commands
 
-```bash
-uv sync --extra api                          # install (dev, incl. FastAPI)
-tradingagents                                # interactive CLI (or: python -m cli.main)
-docker compose up api                        # full stack at http://localhost:8080
-uvicorn api.main:app --reload --port 8080    # dev backend (+ `cd ui && npm run dev` for frontend)
-docker compose run --rm test                 # test suite (unit + smoke + regression, same container as CI)
-python -m pytest tests/ -m "unit or smoke" -q  # quick local tests, no Docker
-cd terraform && terraform plan               # infra preview (apply is human-only)
-```
+Use `make`. Hooks, CI and agents call these exact targets — never invent an equivalent.
+
+| Target | Does |
+|---|---|
+| `make install` | `uv sync` (api + dev extras) and `npm ci` in `ui/` |
+| `make dev` | full stack at http://localhost:8080 (`docker compose up api`) |
+| `make test` | full suite — unit + smoke + regression, same container as CI |
+| `make test-quick` | unit + smoke, no Docker; the commit hook runs it |
+| `make verify` | everything CI gates on: ruff, bandit HIGH, tests, UI build |
+| `make preview` | `terraform plan` (apply is human-only) |
+
+Also: `tradingagents` (interactive CLI, or `python -m cli.main`) · `uvicorn api.main:app --reload --port 8080` + `cd ui && npm run dev` for hot-reload dev.
 
 ## Architecture
 
@@ -47,3 +50,18 @@ Use the project skills instead of improvising: `add-analyst`, `add-llm-provider`
 ## Delegation
 
 Prefer scoped subagents (`.claude/agents/`): **graph-engineer** (pipeline/schemas/LLM clients), **data-engineer** (dataflows only), **ui-engineer** (ui only), **infra-engineer** (terraform/workflows, plan-only), **test-runner** (runs suites, read-only), **release-manager**. Once `tradingagents/execution/` exists, any change there requires an **execution-safety-reviewer** pass before merge.
+
+## Lifecycle config (read by lifecycle-os skills and hooks — keep the field names exact)
+
+`lifecycle: v1.0.0-rc.3`
+
+- **Delivery:** pr
+- **Merge:** auto-when-green
+- **Tracker:** github:tmurphy86/TradingAgents
+- **Cloud:** gcp
+- **Invariants:** Hard Invariants 1–5 above; safety ladder stages (paper → live-confirm → live-auto) are promoted only by soak evidence, never by schedule or code change; `terraform apply` is human-only; `max_instance_count = 1` stays under Terraform control; defined-risk options strategies only.
+- **Protected paths:** `tradingagents/execution/**`, `terraform/**`, `.github/workflows/**` — security-reviewer + owner merge (a merge to `main` deploys, and `terraform.yml` applies on push)
+- **Escalate to program lead (never decide):** any safety-ladder stage change; anything under `tradingagents/execution/`; broker adapter choice; persistence layout changes under `~/.tradingagents/`; new dependencies; revisions to IMPROVEMENT_PLAN assumptions A1–A7.
+- **Default worker:** the domain subagent named in the ticket (graph/data/ui/infra-engineer); lifecycle-os `coder`/`senior-coder` only for work outside those domains. `reviewer` runs on every diff regardless of who wrote it; `execution-safety-reviewer` additionally on anything touching execution.
+- **Doc mapping:** strategy & phasing → `docs/IMPROVEMENT_PLAN.md` (SPEC-analog); dispatchable tickets → GitHub issues labelled `type:ticket` (phases = milestones); owner bug inbox → issues labelled `bug`; prod postmortems stay in `docs/INCIDENTS.md` (via `incident` skill); sync state → `docs/PROJECT_STATE.md`; program-lead entry → `docs/BOOTSTRAP.md`.
+- **Lint/format:** `ruff` (backend, via `make verify`); `ui/` has no lint script yet — `npm run build` (tsc) is the only frontend gate.

@@ -32,8 +32,8 @@ A macro regime screener (rates, curve, VIX, breadth × per-sector system accurac
 | Web dashboard: live SSE runs, history, watchlists | ✅ Shipped |
 | Reflection loop (decisions scored vs realized returns) | ✅ Shipped |
 | GCP Cloud Run deployment, CI/CD (GitHub Actions + WIF), Terraform | ✅ Shipped |
-| Per-run cost tracking, run cancellation, parallel analysts | 🚧 Phase 1 |
-| Accuracy dashboard + point-in-time backtest harness | 🚧 Phase 2 |
+| Per-run cost tracking, run cancellation, parallel analysts | 🔜 Phase 0–1 |
+| Accuracy dashboard + point-in-time backtest harness | 🔜 Phase 2 |
 | Quant ensemble, TradeIdea construction, options strategies | 🔜 Phase 3 |
 | Macro regime screener, deep-dive AI explain, settings/policy UI | 🔜 Phase 3 |
 | Policy-gated execution (Alpaca paper → confirm → auto) | 🔒 Phase 4, gated |
