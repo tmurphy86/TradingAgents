@@ -83,6 +83,11 @@ ignore = [
     "F405",  # may be from star import — consequence of F403 above
 ]
 
+[tool.ruff.format]
+# Never reformat code blocks in docs. Newer ruff formats Python blocks in
+# Markdown by default; README/docs alignment there is deliberate (issue #8).
+exclude = ["*.md"]
+
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "ui", ".github"]
 skips = [
