@@ -2,6 +2,16 @@ import type { RunRequest, RunRecord, RunResult, Watchlist } from './types';
 
 const BASE = (import.meta as any).env?.VITE_API_BASE ?? '';
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -9,7 +19,7 @@ async function request<T>(path: string, opts?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(text || `HTTP ${res.status}`);
+    throw new ApiError(res.status, text || `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -25,6 +35,11 @@ export const api = {
 
   deleteRun: (id: string) =>
     request<void>(`/api/runs/${id}`, { method: 'DELETE' }),
+
+  // Cooperative: a 200 only means the request was accepted. The run stays
+  // 'running' until the `run_cancelled` SSE event. 409 = already finished.
+  cancelRun: (id: string) =>
+    request<{ run_id: string; status: 'cancelling' }>(`/api/runs/${id}/cancel`, { method: 'POST' }),
 
   streamRun: (id: string): EventSource =>
     new EventSource(`${BASE}/api/runs/${id}/stream`),
