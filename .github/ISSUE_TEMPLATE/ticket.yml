@@ -1,0 +1,32 @@
+name: Ticket
+description: A dispatchable unit of work (program lead cuts these; the eng lead consumes them)
+title: "{area}: {outcome}"
+labels: ["type:ticket"]
+body:
+  - type: textarea
+    id: goal
+    attributes: { label: Goal, description: "One sentence — an outcome, not an activity." }
+    validations: { required: true }
+  - type: textarea
+    id: files
+    attributes: { label: Files, description: "Explicit list. Workers may touch ONLY these (senior-coder may justify extras).", render: text }
+    validations: { required: true }
+  - type: textarea
+    id: criteria
+    attributes: { label: Acceptance criteria, description: "Executable/verifiable. Name the tests. The reviewer checks every box.", value: "- [ ] \n- [ ] " }
+    validations: { required: true }
+  - type: textarea
+    id: out_of_scope
+    attributes: { label: Out of scope, description: "Explicit — protects against helpful drift." }
+    validations: { required: true }
+  - type: input
+    id: test
+    attributes: { label: Test command, description: "Exact command, e.g. make test-quick" }
+    validations: { required: true }
+  - type: input
+    id: depends
+    attributes: { label: Depends on, description: "Issue numbers, e.g. #10, #11 — or leave blank" }
+  - type: dropdown
+    id: assign
+    attributes: { label: Assign, options: [coder (haiku), senior-coder (sonnet), test-writer (haiku), other — named in Goal] }
+    validations: { required: true }

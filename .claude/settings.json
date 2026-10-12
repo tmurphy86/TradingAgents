@@ -11,7 +11,48 @@
       "Bash(terraform init*)",
       "Bash(terraform validate*)",
       "Bash(terraform plan*)",
-      "Bash(ruff*)"
+      "Bash(ruff*)",
+      "Bash(make:*)",
+      "Bash(uv run:*)",
+      "Bash(uv sync:*)",
+      "Bash(pnpm install)",
+      "Bash(pnpm run:*)",
+      "Bash(pnpm exec:*)",
+      "Bash(pnpm test:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git switch:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull --ff-only:*)",
+      "Bash(git rebase origin/main)",
+      "Bash(git push origin:*)",
+      "Bash(git push -u origin:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue create:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh issue close:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr merge --squash --delete-branch:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh run watch:*)",
+      "Bash(docker compose ps:*)",
+      "Bash(docker compose logs:*)",
+      "Bash(docker compose up -d:*)",
+      "Bash(docker compose build:*)"
     ],
     "deny": [
       "Read(.env)",
@@ -21,7 +62,29 @@
       "Bash(terraform apply*)",
       "Bash(terraform destroy*)",
       "Bash(gcloud run deploy*)",
-      "Bash(gcloud secrets*)"
+      "Bash(gcloud secrets*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin HEAD:main:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fdx:*)",
+      "Bash(rm -rf:*)",
+      "Bash(gh pr merge *--admin*)",
+      "Bash(terraform apply:*)",
+      "Bash(kubectl apply:*)",
+      "Bash(kubectl delete:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/id_rsa*)"
+    ],
+    "ask": [
+      "Bash(gh repo:*)",
+      "Bash(gh secret:*)",
+      "Bash(gh label:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(docker compose down -v)"
     ]
   },
   "hooks": {
@@ -36,5 +99,16 @@
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "tim-local": {
+      "source": {
+        "source": "github",
+        "repo": "tmurphy86/lifecycle-os"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "lifecycle-os@tim-local": true
   }
 }

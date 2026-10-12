@@ -240,3 +240,6 @@ eval_results/
 
 # Claude Code local (per-user) settings
 .claude/settings.local.json
+
+# understand-anything local index
+.understand-anything/

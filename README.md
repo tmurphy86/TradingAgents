@@ -32,8 +32,8 @@ A macro regime screener (rates, curve, VIX, breadth × per-sector system accurac
 | Web dashboard: live SSE runs, history, watchlists | ✅ Shipped |
 | Reflection loop (decisions scored vs realized returns) | ✅ Shipped |
 | GCP Cloud Run deployment, CI/CD (GitHub Actions + WIF), Terraform | ✅ Shipped |
-| Per-run cost tracking, run cancellation, parallel analysts | 🚧 Phase 1 |
-| Accuracy dashboard + point-in-time backtest harness | 🚧 Phase 2 |
+| Per-run cost tracking, run cancellation, parallel analysts | 🔜 Phase 0–1 |
+| Accuracy dashboard + point-in-time backtest harness | 🔜 Phase 2 |
 | Quant ensemble, TradeIdea construction, options strategies | 🔜 Phase 3 |
 | Macro regime screener, deep-dive AI explain, settings/policy UI | 🔜 Phase 3 |
 | Policy-gated execution (Alpaca paper → confirm → auto) | 🔒 Phase 4, gated |
@@ -78,9 +78,11 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 
 config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "openai"          # 13 providers: openai, anthropic, google, xai, deepseek, qwen[-cn], glm[-cn], minimax[-cn], openrouter, ollama, azure
-config["deep_think_llm"] = "gpt-5.4"       # research + portfolio manager
-config["quick_think_llm"] = "gpt-5.4-mini" # everyone else
+config["llm_provider"] = (
+    "openai"  # 13 providers: openai, anthropic, google, xai, deepseek, qwen[-cn], glm[-cn], minimax[-cn], openrouter, ollama, azure
+)
+config["deep_think_llm"] = "gpt-5.4"  # research + portfolio manager
+config["quick_think_llm"] = "gpt-5.4-mini"  # everyone else
 config["max_debate_rounds"] = 1
 
 ta = TradingAgentsGraph(debug=True, config=config)

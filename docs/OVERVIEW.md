@@ -206,23 +206,23 @@ END  →  final_trade_decision (string) + full AgentState
 The LangGraph state (`tradingagents/agents/utils/agent_states.py`) carries everything between nodes:
 
 ```python
-company_of_interest     # ticker symbol
-asset_type              # "stock" | "crypto"
-trade_date              # YYYY-MM-DD
+company_of_interest  # ticker symbol
+asset_type  # "stock" | "crypto"
+trade_date  # YYYY-MM-DD
 
-market_report           # str from Market Analyst
-sentiment_report        # str from Sentiment Analyst
-news_report             # str from News Analyst
-fundamentals_report     # str from Fundamentals Analyst
+market_report  # str from Market Analyst
+sentiment_report  # str from Sentiment Analyst
+news_report  # str from News Analyst
+fundamentals_report  # str from Fundamentals Analyst
 
-investment_debate_state # InvestDebateState (history + round count)
-investment_plan         # str (ResearchPlan rendered to markdown)
+investment_debate_state  # InvestDebateState (history + round count)
+investment_plan  # str (ResearchPlan rendered to markdown)
 trader_investment_plan  # str (TraderProposal rendered to markdown)
-risk_debate_state       # RiskDebateState (history + round count)
-final_trade_decision    # str (PortfolioDecision rendered to markdown)
+risk_debate_state  # RiskDebateState (history + round count)
+final_trade_decision  # str (PortfolioDecision rendered to markdown)
 
-past_context            # str (injected memory-log entries from prior runs)
-messages                # LangGraph MessagesState (cleared between phases)
+past_context  # str (injected memory-log entries from prior runs)
+messages  # LangGraph MessagesState (cleared between phases)
 ```
 
 ### Debate Routing
@@ -377,14 +377,14 @@ TradingAgents/
 
 **ResearchPlan**
 ```python
-recommendation: PortfolioRating   # Buy | Overweight | Hold | Underweight | Sell
+recommendation: PortfolioRating  # Buy | Overweight | Hold | Underweight | Sell
 rationale: str
 strategic_actions: list[str]
 ```
 
 **TraderProposal**
 ```python
-action: TraderAction              # Buy | Hold | Sell
+action: TraderAction  # Buy | Hold | Sell
 reasoning: str
 entry_price: float
 stop_loss: float
@@ -393,7 +393,7 @@ position_sizing: str
 
 **PortfolioDecision**
 ```python
-rating: PortfolioRating           # Buy | Overweight | Hold | Underweight | Sell
+rating: PortfolioRating  # Buy | Overweight | Hold | Underweight | Sell
 executive_summary: str
 investment_thesis: str
 price_target: float

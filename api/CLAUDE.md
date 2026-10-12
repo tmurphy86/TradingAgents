@@ -17,7 +17,7 @@ Run records: `~/.tradingagents/runs/<id>.json` · Watchlists: `~/.tradingagents/
 
 ## SSE / Streaming
 
-- Event types: `agent_update` · `complete` · `error` · `stream_end`
+- Event types: `agent_update` · `run_complete` · `run_error` · `stream_end`
 - `propagate(..., event_callback=fn)` switches `_run_graph()` to `graph.stream()`; `_emit_state_events()` diffs snapshots against `_WATCHED_FIELDS` / `_DEBATE_FIELDS` (see `tradingagents/graph/trading_graph.py`).
 - **Thread bridge rule:** events cross from the sync background thread to the async loop via `loop.call_soon_threadsafe(q.put_nowait, event)`. Never call `asyncio.Queue` methods directly from a non-async thread.
 - Orphaned run records are healed on startup: the lifespan handler marks any record stuck in `running` as `error`.
