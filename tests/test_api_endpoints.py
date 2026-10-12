@@ -294,27 +294,3 @@ class TestWatchlists:
     def test_blank_tickers_stripped(self, client):
         r = client.post("/api/watchlists", json={"name": "Sparse", "tickers": ["AAPL", "  ", ""]})
         assert r.json()["tickers"] == ["AAPL"]
-
-
-# ---------------------------------------------------------------------------
-# Legacy /analyze endpoint (backward-compat)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.regression
-class TestLegacyAnalyze:
-    def test_returns_ticker_and_date(self, client):
-        mock_state = {}
-        with patch("api.main.TradingAgentsGraph") as MockGraph:
-            instance = MockGraph.return_value
-            instance.propagate.return_value = (mock_state, "Buy")
-            r = client.post("/analyze", json=_VALID_RUN)
-        assert r.status_code == 200
-        data = r.json()
-        assert data["ticker"] == "AAPL"
-        assert data["date"] == "2026-01-15"
-        assert data["decision"] == "Buy"
-
-    def test_path_traversal_ticker_rejected(self, client):
-        r = client.post("/analyze", json={**_VALID_RUN, "ticker": "../../etc"})
-        assert r.status_code == 422

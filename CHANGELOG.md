@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [Unreleased]
+
+### Removed
+
+- **BREAKING:** `POST /analyze` and the `AnalyzeRequest` model are removed. Use
+  `POST /api/runs` (then `GET /api/runs/{id}` or the SSE stream) instead.
+- **BREAKING:** `create_social_media_analyst` (deprecated alias) and the
+  `tradingagents.agents.analysts.social_media_analyst` shim module are removed.
+  Use `create_sentiment_analyst`.
+- **BREAKING:** root-level `main.py`, `test.py` and `requirements.txt` are
+  removed. Dependencies live in `pyproject.toml` / `uv.lock`.
+- `tradingagents/llm_clients/TODO.md` removed (its last open item,
+  `validate_model()` never called, is done via `warn_if_unknown_model`).
+
+### Changed
+
+- API startup orphan-healing now runs from a FastAPI lifespan handler instead
+  of the deprecated `@app.on_event("startup")`; behaviour is unchanged.
+- Timestamps use `datetime.now(timezone.utc)` instead of the deprecated
+  `datetime.utcnow()`; the stored ISO string shape (naive UTC) is unchanged.
+
 ## [0.2.5] — 2026-05-11
 
 ### Added

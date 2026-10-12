@@ -3,7 +3,9 @@ import json
 import logging
 import threading
 import uuid
-from datetime import datetime
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -44,7 +46,30 @@ _runs_lock = threading.Lock()
 
 _FINISHED_STATUSES = ("complete", "error", "cancelled")
 
-app = FastAPI(title="TradingAgents API", version="0.3.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Mark any runs that were 'running' when the server last died as errors."""
+    for p in RUNS_DIR.glob("*.json"):
+        try:
+            with open(p) as f:
+                record = json.load(f)
+            if record.get("status") == "running":
+                record["status"] = "error"
+                record["error"] = "Server restarted while run was active."
+                with open(p, "w") as f:
+                    json.dump(record, f, indent=2)
+        except Exception:
+            pass
+    yield
+
+
+def _utcnow_iso() -> str:
+    """Naive-UTC ISO timestamp (no offset suffix) - the stored/consumed shape."""
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+
+
+app = FastAPI(title="TradingAgents API", version="0.3.0", lifespan=_lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -231,7 +256,7 @@ def _execute_run(run_id: str, req: RunRequest, loop: asyncio.AbstractEventLoop) 
         finish(
             {
                 "status": "complete",
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": _utcnow_iso(),
                 "result": result,
             },
             {"type": "run_complete", "decision": decision, "result": result},
@@ -240,7 +265,7 @@ def _execute_run(run_id: str, req: RunRequest, loop: asyncio.AbstractEventLoop) 
     except RunCancelled:
         logger.info("Run %s cancelled", run_id)
         finish(
-            {"status": "cancelled", "completed_at": datetime.utcnow().isoformat()},
+            {"status": "cancelled", "completed_at": _utcnow_iso()},
             {"type": "run_cancelled"},
         )
     except Exception as e:
@@ -251,27 +276,6 @@ def _execute_run(run_id: str, req: RunRequest, loop: asyncio.AbstractEventLoop) 
             loop.call_soon_threadsafe(q.put_nowait, None)  # sentinel
         _run_queues.pop(run_id, None)
         _run_cancels.pop(run_id, None)
-
-
-# ---------------------------------------------------------------------------
-# Startup
-# ---------------------------------------------------------------------------
-
-
-@app.on_event("startup")
-async def _startup() -> None:
-    """Mark any runs that were 'running' when the server last died as errors."""
-    for p in RUNS_DIR.glob("*.json"):
-        try:
-            with open(p) as f:
-                record = json.load(f)
-            if record.get("status") == "running":
-                record["status"] = "error"
-                record["error"] = "Server restarted while run was active."
-                with open(p, "w") as f:
-                    json.dump(record, f, indent=2)
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +295,7 @@ async def create_run(req: RunRequest) -> dict:
         "ticker": req.ticker,
         "date": req.date,
         "status": "running",
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": _utcnow_iso(),
         "completed_at": None,
         "config": req.model_dump(),
         "result": None,
@@ -412,7 +416,7 @@ async def create_watchlist(req: WatchlistRequest) -> dict:
         "id": str(uuid.uuid4()),
         "name": req.name,
         "tickers": [t.strip().upper() for t in req.tickers if t.strip()],
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": _utcnow_iso(),
     }
     watchlists.append(wl)
     _save_watchlists(watchlists)
@@ -441,70 +445,9 @@ async def delete_watchlist(wl_id: str) -> dict:
     return {"deleted": wl_id}
 
 
-# ---------------------------------------------------------------------------
-# Backward-compatible /analyze endpoint
-# ---------------------------------------------------------------------------
-
-
-class AnalyzeRequest(BaseModel):
-    ticker: str
-    date: str
-    llm_provider: str = "openai"
-    deep_think_llm: str = DEFAULT_CONFIG.get("deep_think_llm", "gpt-4o")
-    quick_think_llm: str = DEFAULT_CONFIG.get("quick_think_llm", "gpt-4o-mini")
-    max_debate_rounds: int = 1
-    max_risk_discuss_rounds: int = 1
-    analysts: list[str] = ["market", "social", "news", "fundamentals"]
-    asset_type: Literal["stock", "crypto"] = "stock"
-
-    @field_validator("ticker")
-    @classmethod
-    def _v_ticker(cls, v: str) -> str:
-        return safe_ticker_component(v).upper()
-
-    @field_validator("date")
-    @classmethod
-    def _v_date(cls, v: str) -> str:
-        from datetime import date as date_cls
-
-        date_cls.fromisoformat(v)
-        return v
-
-    @field_validator("analysts")
-    @classmethod
-    def _v_analysts(cls, v: list[str]) -> list[str]:
-        unknown = set(v) - VALID_ANALYSTS
-        if unknown:
-            raise ValueError(
-                f"unknown analysts: {sorted(unknown)}. Valid keys: {sorted(VALID_ANALYSTS)}"
-            )
-        return v
-
-
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
-
-
-@app.post("/analyze")
-async def analyze(req: AnalyzeRequest) -> dict:
-    config = DEFAULT_CONFIG.copy()
-    config.update(
-        {
-            "llm_provider": req.llm_provider,
-            "deep_think_llm": req.deep_think_llm,
-            "quick_think_llm": req.quick_think_llm,
-            "max_debate_rounds": req.max_debate_rounds,
-            "max_risk_discuss_rounds": req.max_risk_discuss_rounds,
-        }
-    )
-    try:
-        ta = TradingAgentsGraph(selected_analysts=req.analysts, config=config)
-        _, decision = await asyncio.to_thread(ta.propagate, req.ticker, req.date, req.asset_type)
-    except Exception:
-        logger.exception("Analysis failed for %s on %s", req.ticker, req.date)
-        raise HTTPException(status_code=500, detail="Analysis failed")
-    return {"ticker": req.ticker, "date": req.date, "decision": decision}
 
 
 # ---------------------------------------------------------------------------
